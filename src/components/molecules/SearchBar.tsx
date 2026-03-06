@@ -6,12 +6,14 @@ import { SearchOutlined } from "@ant-design/icons";
 
 interface SearchBarProps {
   placeholder?: string;
+  value?: string;
   onSearch: (value: string) => void;
   className?: string;
 }
 
 export default function SearchBar({
   placeholder = "Search candidates...",
+  value,
   onSearch,
   className = "",
 }: SearchBarProps) {
@@ -21,6 +23,7 @@ export default function SearchBar({
       placeholder={placeholder}
       allowClear
       size="large"
+      value={value}
       onChange={(e) => onSearch(e.target.value)}
       className={`glass-input ${className}`}
       style={{

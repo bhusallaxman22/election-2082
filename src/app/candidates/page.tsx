@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import PageTemplate from "@/components/templates/PageTemplate";
 import CandidateCard from "@/components/organisms/CandidateCard";
 import SearchBar from "@/components/molecules/SearchBar";
@@ -11,11 +12,17 @@ function normalize(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export default function CandidatesPage() {
+function CandidatesContent() {
+  const searchParams = useSearchParams();
+  const searchFromUrl = searchParams.get("search") ?? "";
   const { popularCandidates, candidatesLoading } = useElectionData();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchFromUrl);
   const [province, setProvince] = useState("");
   const [district, setDistrict] = useState("");
+
+  useEffect(() => {
+    setSearch(searchFromUrl);
+  }, [searchFromUrl]);
 
   const filtered = useMemo(() => {
     let results = [...popularCandidates];
@@ -84,7 +91,7 @@ export default function CandidatesPage() {
 
             <div className="mt-6 flex flex-col gap-3 lg:flex-row">
               <div className="flex-1">
-                <SearchBar placeholder="Search by candidate or constituency..." onSearch={setSearch} />
+                <SearchBar placeholder="Search by candidate or constituency..." value={search} onSearch={setSearch} />
               </div>
               <FilterDropdowns
                 selectedProvince={province}
@@ -128,5 +135,21 @@ export default function CandidatesPage() {
         )}
       </section>
     </PageTemplate>
+  );
+}
+
+export default function CandidatesPage() {
+  return (
+    <Suspense
+      fallback={
+        <PageTemplate>
+          <section className="glass-card p-10 text-center">
+            <p className="text-sm font-semibold text-slate-500">Loading candidates...</p>
+          </section>
+        </PageTemplate>
+      }
+    >
+      <CandidatesContent />
+    </Suspense>
   );
 }

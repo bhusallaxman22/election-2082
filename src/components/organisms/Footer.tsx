@@ -27,23 +27,56 @@ export default function Footer() {
           </div>
 
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Archives</p>
-            <div className="mt-3 flex flex-col gap-2.5">
-              <a href="https://generalelection2079.ekantipur.com/" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-slate-300 transition-colors hover:text-white">
-                Federal Election 2079
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Developer</p>
+            <h4 className="mt-2 text-2xl font-black text-white">Laxman Bhusal</h4>
+            <a
+              href="https://bhusallaxman.com.np"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-block text-sm font-semibold text-slate-300 transition-colors hover:text-white"
+            >
+              bhusallaxman.com.np
+            </a>
+
+            <div className="mt-4 flex flex-col gap-2.5">
+              <a
+                href="https://github.com/bhusallaxman22"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-slate-300 transition-colors hover:text-white"
+              >
+                GitHub: bhusallaxman22
               </a>
-              <a href="https://generalelection2074.ekantipur.com/" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-slate-300 transition-colors hover:text-white">
-                Federal Election 2074
+              <a
+                href="https://www.linkedin.com/in/laxman-bhushal-54426617b/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-slate-300 transition-colors hover:text-white"
+              >
+                LinkedIn: laxman-bhushal-54426617b
               </a>
-              <a href="https://localelection2079.ekantipur.com/" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-slate-300 transition-colors hover:text-white">
-                Local Election 2079
+              <a
+                href="https://instagram.com/lakshman.22"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-slate-300 transition-colors hover:text-white"
+              >
+                Instagram: lakshman.22
               </a>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 border-t border-slate-800 pt-5 text-xs text-slate-500">
-          © 2026 निर्वाचन 2082. Election data sourced from public election feeds.
+        <div className="mt-8 flex flex-col gap-2 border-t border-slate-800 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>© 2026 निर्वाचन 2082. Election data sourced from public election feeds.</span>
+          <a
+            href="https://bhusallaxman.com.np"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-400 transition-colors hover:text-white"
+          >
+            developed by Laxman Bhusal bhusallaxman.com.np
+          </a>
         </div>
       </div>
     </footer>

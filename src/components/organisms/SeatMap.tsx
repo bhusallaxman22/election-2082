@@ -370,78 +370,86 @@ export default function SeatMap({
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,rgba(15,23,42,0.06),transparent_50%)]" />
 
         <div className="relative h-full w-full">
-          {seatPoints.map(({ slot, x, y }) => {
-            const key = `${slot.districtId}-${slot.constNumber}`;
-            const isWon = isSeatData(slot) && slot.status === "won";
-            const isLeading = isSeatData(slot) && slot.status === "leading";
-            const partyColor = isSeatData(slot)
-              ? resolvePartyColor(slot.partyShortName, slot.partyColor)
-              : "#d1d5db";
-            const seatColor = isSeatData(slot)
-              ? isWon
-                ? partyColor
-                : isLeading
-                  ? withAlpha(partyColor, 0.55)
-                  : "#cbd5e1"
-              : "#d1d5db";
-            const seatBorder = isSeatData(slot) && (isWon || isLeading) ? partyColor : "#cbd5e1";
-            const label = isSeatData(slot)
-              ? `${slot.constituency} — ${slot.partyShortName}${isWon ? " (Won)" : isLeading ? " (Leading)" : ""}`
-              : `${slot.constituency} (Pending)`;
+          {seatPoints.length === 0 ? (
+            <div className="absolute inset-0 flex items-center justify-center text-center">
+              <div className="rounded-xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-semibold text-slate-500">
+                No seats matched your search and filters.
+              </div>
+            </div>
+          ) : (
+            seatPoints.map(({ slot, x, y }) => {
+              const key = `${slot.districtId}-${slot.constNumber}`;
+              const isWon = isSeatData(slot) && slot.status === "won";
+              const isLeading = isSeatData(slot) && slot.status === "leading";
+              const partyColor = isSeatData(slot)
+                ? resolvePartyColor(slot.partyShortName, slot.partyColor)
+                : "#d1d5db";
+              const seatColor = isSeatData(slot)
+                ? isWon
+                  ? partyColor
+                  : isLeading
+                    ? withAlpha(partyColor, 0.55)
+                    : "#cbd5e1"
+                : "#d1d5db";
+              const seatBorder = isSeatData(slot) && (isWon || isLeading) ? partyColor : "#cbd5e1";
+              const label = isSeatData(slot)
+                ? `${slot.constituency} — ${slot.partyShortName}${isWon ? " (Won)" : isLeading ? " (Leading)" : ""}`
+                : `${slot.constituency} (Pending)`;
 
-            const content = (
-              <span
-                className="absolute -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 hover:scale-110"
-                style={{
-                  left: `${x}%`,
-                  top: `${y}%`,
-                  width: `${seatSize}px`,
-                  height: `${seatSize}px`,
-                  filter: isWon ? `drop-shadow(0 0 2px ${withAlpha(seatBorder, 0.65)})` : "none",
-                }}
-                title={label}
-                onMouseEnter={(event) => {
-                  if (!isSeatData(slot)) return;
-                  setHoveredSeat(slot);
-                  setTooltipPos({ x: event.clientX, y: event.clientY });
-                }}
-                onMouseMove={(event) => {
-                  if (!hoveredSeat) return;
-                  setTooltipPos({ x: event.clientX, y: event.clientY });
-                }}
-                onMouseLeave={() => setHoveredSeat(null)}
-              >
-                <SeatGlyph size={seatSize} fillColor={seatColor} strokeColor={seatBorder} />
-                {isWon && (
-                  <span
-                    className="absolute -right-1.5 -top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-white text-[10px] font-black leading-none text-white"
-                    style={{ backgroundColor: partyColor }}
-                  >
-                    ✓
-                  </span>
-                )}
-              </span>
-            );
+              const content = (
+                <span
+                  className="absolute -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 hover:scale-110"
+                  style={{
+                    left: `${x}%`,
+                    top: `${y}%`,
+                    width: `${seatSize}px`,
+                    height: `${seatSize}px`,
+                    filter: isWon ? `drop-shadow(0 0 2px ${withAlpha(seatBorder, 0.65)})` : "none",
+                  }}
+                  title={label}
+                  onMouseEnter={(event) => {
+                    if (!isSeatData(slot)) return;
+                    setHoveredSeat(slot);
+                    setTooltipPos({ x: event.clientX, y: event.clientY });
+                  }}
+                  onMouseMove={(event) => {
+                    if (!hoveredSeat) return;
+                    setTooltipPos({ x: event.clientX, y: event.clientY });
+                  }}
+                  onMouseLeave={() => setHoveredSeat(null)}
+                >
+                  <SeatGlyph size={seatSize} fillColor={seatColor} strokeColor={seatBorder} />
+                  {isWon && (
+                    <span
+                      className="absolute -right-1.5 -top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-white text-[10px] font-black leading-none text-white"
+                      style={{ backgroundColor: partyColor }}
+                    >
+                      ✓
+                    </span>
+                  )}
+                </span>
+              );
 
-            if (!isSeatData(slot)) {
-              return <React.Fragment key={key}>{content}</React.Fragment>;
-            }
+              if (!isSeatData(slot)) {
+                return <React.Fragment key={key}>{content}</React.Fragment>;
+              }
 
-            return (
-              <Link
-                key={key}
-                href={`/results?constituency=${slot.constituencySlug}`}
-                onClick={(event) => {
-                  if (!onSeatClick) return;
-                  event.preventDefault();
-                  onSeatClick(slot);
-                }}
-                className="contents"
-              >
-                {content}
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={key}
+                  href={`/results?constituency=${slot.constituencySlug}`}
+                  onClick={(event) => {
+                    if (!onSeatClick) return;
+                    event.preventDefault();
+                    onSeatClick(slot);
+                  }}
+                  className="contents"
+                >
+                  {content}
+                </Link>
+              );
+            })
+          )}
         </div>
 
         <div className="pointer-events-none absolute bottom-1.5 left-1/2 h-6 w-28 -translate-x-1/2 rounded-t-full border border-slate-300/45 bg-slate-900/10 sm:bottom-2 sm:h-7 sm:w-36" />

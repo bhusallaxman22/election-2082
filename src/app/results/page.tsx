@@ -42,6 +42,7 @@ function ResultsContent() {
   const statusFilter = searchParams.get("status");
   const partyFilter = searchParams.get("party");
   const constituencyFilter = searchParams.get("constituency");
+  const searchFilter = searchParams.get("search");
 
   const { parties, popularCandidates, provinceResults } = useElectionData();
   const [allSeats, setAllSeats] = useState<SeatResult[]>([]);
@@ -52,7 +53,7 @@ function ResultsContent() {
   const totalLeads = parties.reduce((s, p) => s + p.leads, 0);
   const progress = ((totalWins + totalLeads) / totalSeats) * 100;
 
-  const hasFilter = statusFilter || partyFilter || constituencyFilter;
+  const hasFilter = statusFilter || partyFilter || constituencyFilter || searchFilter;
 
   // Fetch all seat data when filters are applied
   useEffect(() => {
@@ -82,8 +83,28 @@ function ResultsContent() {
     if (constituencyFilter) {
       data = data.filter((s) => s.constituencySlug === constituencyFilter);
     }
+    if (searchFilter) {
+      const normalized = searchFilter.toLowerCase().trim();
+      data = data.filter((s) => {
+        const seatMatch =
+          s.constituency.toLowerCase().includes(normalized) ||
+          s.constituencySlug.toLowerCase().includes(normalized) ||
+          s.districtName.toLowerCase().includes(normalized) ||
+          s.provinceName.toLowerCase().includes(normalized) ||
+          s.leaderName.toLowerCase().includes(normalized) ||
+          s.runnerUpName.toLowerCase().includes(normalized) ||
+          s.partyShortName.toLowerCase().includes(normalized);
+
+        if (seatMatch) return true;
+        return s.candidates.some(
+          (candidate) =>
+            candidate.name.toLowerCase().includes(normalized) ||
+            candidate.partyShortName.toLowerCase().includes(normalized)
+        );
+      });
+    }
     return data;
-  }, [allSeats, statusFilter, partyFilter, constituencyFilter]);
+  }, [allSeats, statusFilter, partyFilter, constituencyFilter, searchFilter]);
 
   const filterTitle = statusFilter
     ? statusFilter === "won"
@@ -95,7 +116,9 @@ function ResultsContent() {
       ? `${partyFilter.toUpperCase()} Results`
       : constituencyFilter
         ? `Constituency Result`
-        : null;
+        : searchFilter
+          ? `Search: ${searchFilter}`
+          : null;
 
   const activeConstituencies = popularCandidates.filter(
     (c) => c.totalVotes > 0
