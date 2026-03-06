@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useElectionData } from "@/context/ElectionDataContext";
 
@@ -23,8 +24,15 @@ export default function Header() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center justify-between gap-4">
             <Link href="/" className="group flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 via-orange-500 to-sky-500 text-white shadow-lg shadow-red-500/20 transition-transform group-hover:scale-105">
-                <span className="font-black text-sm tracking-tight">E82</span>
+              <div className="relative h-11 w-11 overflow-hidden rounded-2xl shadow-lg shadow-red-500/20 transition-transform group-hover:scale-105">
+                <Image
+                  src="/assets/branding/election-2082-mark.svg"
+                  alt="Election 2082 Logo"
+                  fill
+                  sizes="44px"
+                  priority
+                  className="object-cover"
+                />
               </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">National Dashboard</p>

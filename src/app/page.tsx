@@ -30,6 +30,7 @@ export default function HomePage() {
   const [target, setTarget] = useState<SearchTarget>("results");
   const [status, setStatus] = useState<"all" | "won" | "leading" | "pending">("all");
   const [party, setParty] = useState<string>("all");
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://election.bhusallaxman.com.np";
 
   const partyOptions = useMemo(() => {
     const options = new Set<string>();
@@ -55,6 +56,47 @@ export default function HomePage() {
 
     return Array.from(hints).slice(0, 80);
   }, [parties, popularCandidates]);
+
+  const structuredData = useMemo(
+    () => ({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          name: "Nepal Election 2082",
+          url: siteUrl,
+          inLanguage: "en",
+          description:
+            "Nepal election live update with federal parliament election 2082 results, party-wise counts and constituency details.",
+          potentialAction: {
+            "@type": "SearchAction",
+            target: `${siteUrl}/results?search={search_term_string}`,
+            "query-input": "required name=search_term_string",
+          },
+        },
+        {
+          "@type": "Organization",
+          name: "Election 2082",
+          url: siteUrl,
+          logo: `${siteUrl}/icon.png`,
+        },
+        {
+          "@type": "WebPage",
+          name: "Nepal Election Live Update 2082",
+          url: siteUrl,
+          about: [
+            "Nepal Election",
+            "Nepal Election Live Update",
+            "Nepal Federal Election 2082",
+            "Nepal Parliament Election",
+            "RSP",
+            "Nepali Congress",
+          ],
+        },
+      ],
+    }),
+    [siteUrl]
+  );
 
   const navigateFromTopSearch = () => {
     const trimmedQuery = query.trim();
@@ -131,6 +173,12 @@ export default function HomePage() {
   return (
     <PageTemplate>
       <div className="space-y-9">
+        <script
+          type="application/ld+json"
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+
         <section className="animate-fade-in">
           <div className="glass-card p-5 sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
@@ -260,6 +308,23 @@ export default function HomePage() {
 
         <section>
           <ProportionalResults />
+        </section>
+
+        <section className="animate-fade-in">
+          <div className="glass-card p-6 sm:p-8">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">SEO Landing Content</p>
+            <h2 className="mt-2 text-xl font-black text-slate-900">Nepal Election Live Update And Results 2082</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Election.bhusallaxman.com.np provides Nepal election live update coverage for Nepal federal election 2082
+              and Nepal parliament election races. Track constituency-level vote counting, live result movement, and
+              updates for major parties including RSP, Nepali Congress, CPN-UML, Maoist, NCP, and independents.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              If you are searching for Nepal election, election live update, election 2082, Nepal federal election 2082,
+              or Nepal parliament election updates, this dashboard is built to provide fast and clear public result
+              tracking in one place.
+            </p>
+          </div>
         </section>
       </div>
     </PageTemplate>
