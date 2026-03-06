@@ -9,6 +9,7 @@ export interface Party {
   wins: number;
   leads: number;
   totalSeats: number;
+  samanupatik: number;
 }
 
 export const parties: Party[] = [
@@ -23,6 +24,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 38,
     totalSeats: 38,
+    samanupatik: 0,
   },
   {
     id: 2,
@@ -35,6 +37,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 3,
     totalSeats: 3,
+    samanupatik: 0,
   },
   {
     id: 9,
@@ -47,6 +50,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 2,
     totalSeats: 2,
+    samanupatik: 0,
   },
   {
     id: 1,
@@ -59,6 +63,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 3,
@@ -71,6 +76,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 6,
@@ -83,6 +89,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 11,
@@ -95,6 +102,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 12,
@@ -107,6 +115,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 13,
@@ -119,6 +128,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 17,
@@ -131,6 +141,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 22,
@@ -143,6 +154,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 36,
@@ -155,6 +167,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 19,
@@ -167,6 +180,7 @@ export const parties: Party[] = [
     wins: 0,
     leads: 0,
     totalSeats: 0,
+    samanupatik: 0,
   },
   {
     id: 99,
@@ -179,5 +193,6 @@ export const parties: Party[] = [
     wins: 0,
     leads: 1,
     totalSeats: 1,
+    samanupatik: 0,
   },
 ];

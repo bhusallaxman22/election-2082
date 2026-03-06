@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cacheGet, cacheSet } from "@/lib/redis";
+import { cacheGet } from "@/lib/redis";
 import { query } from "@/lib/db";
 import { ensureSchema } from "@/lib/migrate";
 

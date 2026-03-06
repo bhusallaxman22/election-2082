@@ -239,10 +239,12 @@ async function syncParties(): Promise<number> {
 async function syncConstituencies(): Promise<number> {
   const allConst = getAllConstituencies();
   let changed = 0;
-  const batchSize = 20;
+  const batchSize = 5; // Keep small to avoid 429 rate limits
 
   for (let i = 0; i < allConst.length; i += batchSize) {
     const batch = allConst.slice(i, i + batchSize);
+    // Small delay between batches to avoid rate limiting
+    if (i > 0) await new Promise((r) => setTimeout(r, 500));
 
     const batchResults = await Promise.allSettled(
       batch.map(async (c) => {

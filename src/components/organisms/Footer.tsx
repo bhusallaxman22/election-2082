@@ -68,7 +68,17 @@ export default function Footer() {
         </div>
 
         <div className="mt-8 flex flex-col gap-2 border-t border-slate-800 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>© 2026 निर्वाचन 2082. Election data sourced from public election feeds.</span>
+          <span>
+            © 2026 निर्वाचन 2082. Data fetched from Election Commission:{" "}
+            <a
+              href="https://result.election.gov.np/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-slate-400 transition-colors hover:text-white"
+            >
+              result.election.gov.np
+            </a>
+          </span>
           <a
             href="https://bhusallaxman.com.np"
             target="_blank"

@@ -22,6 +22,7 @@ interface APIPartyResult {
   leading_count: number | string;
   winner_count: number | string;
   total_seat: number | string;
+  samanupatik: number | string;
 }
 
 interface ElectionResponse {
@@ -213,6 +214,7 @@ function mapParty(api: APIPartyResult): Party {
     wins: toNumber(api.winner_count),
     leads: toNumber(api.leading_count),
     totalSeats: toNumber(api.total_seat),
+    samanupatik: toNumber(api.samanupatik),
   };
 }
 

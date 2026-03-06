@@ -204,7 +204,7 @@ export default function PartyDetailPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <Link
                 href={`/parties/${slug}?tab=won`}
                 onClick={(e) => { e.preventDefault(); setTab("won"); }}
@@ -223,7 +223,11 @@ export default function PartyDetailPage() {
               </Link>
               <div className="rounded-xl border border-gray-100 bg-gray-50/80 px-4 py-3 text-center">
                 <div className="text-3xl font-extrabold text-gray-900 tabular-nums">{party.wins + party.leads}</div>
-                <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Total</div>
+                <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">FPTP Total</div>
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-center">
+                <div className="text-2xl font-extrabold text-blue-700 tabular-nums">{party.samanupatik > 0 ? party.samanupatik.toLocaleString() : "—"}</div>
+                <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">PR Votes</div>
               </div>
               <div className="rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-center">
                 <div className="text-3xl font-extrabold text-red-600 tabular-nums">{closeRaces.length}</div>

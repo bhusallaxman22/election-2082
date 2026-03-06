@@ -5,6 +5,19 @@
 
 const EC_BASE = "https://result.election.gov.np";
 
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
+
+const COMMON_HEADERS: Record<string, string> = {
+  "User-Agent": BROWSER_UA,
+  Accept: "application/json, text/javascript, */*; q=0.01",
+  "X-Requested-With": "XMLHttpRequest",
+  DNT: "1",
+  "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"macOS"',
+};
+
 let cachedSession: { cookie: string; csrf: string; ts: number } | null = null;
 const SESSION_TTL = 4 * 60 * 1000; // 4 minutes (sessions expire quickly)
 
@@ -18,7 +31,7 @@ async function getSession(): Promise<{ cookie: string; csrf: string }> {
 
   try {
     const res = await fetch(EC_BASE + "/", {
-      headers: { "User-Agent": "Mozilla/5.0" },
+      headers: { "User-Agent": BROWSER_UA },
       redirect: "follow",
       signal: controller.signal,
     });
@@ -72,47 +85,73 @@ async function getSession(): Promise<{ cookie: string; csrf: string }> {
 }
 
 export async function fetchECJson<T = unknown>(filePath: string): Promise<T> {
-  const { cookie, csrf } = await getSession();
-  const url = `${EC_BASE}/Handlers/SecureJson.ashx?file=${filePath}`;
+  // Try direct static file fetch first (like browser does), fall back to SecureJson handler
+  const directUrl = `${EC_BASE}/${filePath}`;
+  const handlerUrl = `${EC_BASE}/Handlers/SecureJson.ashx?file=${filePath}`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000); // 15s timeout
+  const timeout = setTimeout(() => controller.abort(), 15_000);
 
   try {
-    const res = await fetch(url, {
+    // Attempt 1: Direct static fetch (no session/CSRF needed)
+    const directRes = await fetch(directUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0",
-        "X-Csrf-Token": csrf,
+        ...COMMON_HEADERS,
         Referer: EC_BASE + "/",
-        Cookie: cookie,
       },
       signal: controller.signal,
     });
 
-  if (!res.ok) {
-    // Session might have expired – clear cache and retry once
-    if (res.status === 403 && cachedSession) {
-      cachedSession = null;
-      const newSession = await getSession();
-      const retry = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          "X-Csrf-Token": newSession.csrf,
-          Referer: EC_BASE + "/",
-          Cookie: newSession.cookie,
-        },
-        signal: controller.signal,
-      });
-      if (!retry.ok) throw new Error(`EC API ${retry.status}: ${filePath}`);
-      const text = await retry.text();
-      // Handle BOM
+    if (directRes.ok) {
+      const text = await directRes.text();
       return JSON.parse(text.replace(/^\uFEFF/, ""));
     }
-    throw new Error(`EC API ${res.status}: ${filePath}`);
-  }
 
-  const text = await res.text();
-  return JSON.parse(text.replace(/^\uFEFF/, ""));
+    // Attempt 2: Fall back to SecureJson handler with session/CSRF
+    const makeHeaders = (session: { cookie: string; csrf: string }) => ({
+      ...COMMON_HEADERS,
+      "X-Csrf-Token": session.csrf,
+      Referer: EC_BASE + "/",
+      Cookie: session.cookie,
+    });
+
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const session = await getSession();
+        const res = await fetch(handlerUrl, {
+          headers: makeHeaders(session),
+          signal: controller.signal,
+        });
+
+        if (res.status === 429) {
+          const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+          console.warn(`[ec-api] 429 for ${filePath}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        if (res.status === 403 && cachedSession) {
+          cachedSession = null;
+          continue;
+        }
+
+        if (!res.ok) {
+          throw new Error(`EC API ${res.status}: ${filePath}`);
+        }
+
+        const text = await res.text();
+        return JSON.parse(text.replace(/^\uFEFF/, ""));
+      } catch (err) {
+        if (attempt === MAX_RETRIES) throw err;
+        if (err instanceof Error && err.name === "AbortError") throw err;
+        const delay = 2000 * Math.pow(2, attempt);
+        console.warn(`[ec-api] Error for ${filePath}, retrying in ${delay}ms:`, (err as Error).message);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+
+    throw new Error(`EC API failed after ${MAX_RETRIES} retries: ${filePath}`);
   } finally {
     clearTimeout(timeout);
   }
@@ -185,7 +224,7 @@ export async function fetchECConstituencyCounts(): Promise<ECConstituencyCount[]
 }
 
 export async function fetchECPartyResults(): Promise<ECPartyResult[]> {
-  return fetchECJson("JSONFiles/Election2082/Common/HoRPartyTop5.txt");
+  return fetchECJson("HoRPartyTop5.json");
 }
 
 export async function fetchECConstituencyResults(

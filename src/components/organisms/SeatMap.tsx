@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { provinces } from "@/data/provinces";
 
 interface SeatData {
@@ -52,6 +52,12 @@ interface SeatPoint {
 }
 
 const SEATING_TEMPLATE = [39, 35, 31, 27, 22, 11];
+const CHAMBER_WIDTH = 1000;
+const CHAMBER_HEIGHT = 620;
+const CHAMBER_CENTER_X = 500;
+const CHAMBER_CENTER_Y = 546;
+const CHAMBER_OUTER_RADIUS = 462;
+const CHAMBER_INNER_RADIUS = 208;
 const PARTY_COLOR_MAP: Record<string, string> = {
   RSP: "#2563eb",
   NC: "#16a34a",
@@ -91,44 +97,6 @@ function withAlpha(color: string, alpha: number): string {
     .toString(16)
     .padStart(2, "0");
   return `${color}${alphaHex}`;
-}
-
-function SeatGlyph({
-  size,
-  fillColor,
-  strokeColor,
-}: {
-  size: number;
-  fillColor: string;
-  strokeColor: string;
-}) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" role="presentation" aria-hidden="true">
-      <path
-        d="M7 10V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v4"
-        fill={fillColor}
-        stroke={strokeColor}
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <rect
-        x="5"
-        y="10"
-        width="14"
-        height="6.5"
-        rx="2.3"
-        fill={fillColor}
-        stroke={strokeColor}
-        strokeWidth="1.6"
-      />
-      <path
-        d="M7.3 16.5V20M16.7 16.5V20M4 20H20"
-        stroke={strokeColor}
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
 }
 
 function getRowCounts(total: number): number[] {
@@ -180,6 +148,10 @@ function slotMatchesFilter(
   return true;
 }
 
+function arcPath(radius: number): string {
+  return `M ${CHAMBER_CENTER_X - radius} ${CHAMBER_CENTER_Y} A ${radius} ${radius} 0 0 1 ${CHAMBER_CENTER_X + radius} ${CHAMBER_CENTER_Y}`;
+}
+
 export default function SeatMap({
   onSeatClick,
   filterProvince,
@@ -187,6 +159,7 @@ export default function SeatMap({
   filterStatus,
   compact = false,
 }: SeatMapProps) {
+  const router = useRouter();
   const [seats, setSeats] = useState<SeatData[]>([]);
   const [hoveredSeat, setHoveredSeat] = useState<SeatData | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -270,6 +243,8 @@ export default function SeatMap({
     [allSeatSlots, filterProvince, filterParty, filterStatus]
   );
 
+  const rowCounts = useMemo(() => getRowCounts(displaySlots.length), [displaySlots.length]);
+
   const wonCount = displaySlots.filter((slot) => isSeatData(slot) && slot.status === "won").length;
   const leadingCount = displaySlots.filter((slot) => isSeatData(slot) && slot.status === "leading").length;
   const pendingCount = displaySlots.filter((slot) => ("placeholder" in slot ? true : slot.status === "pending")).length;
@@ -294,20 +269,17 @@ export default function SeatMap({
   }, [displaySlots]);
 
   const seatPoints = useMemo(() => {
-    const rows = getRowCounts(displaySlots.length);
     const points: SeatPoint[] = [];
-    if (rows.length === 0) return points;
+    if (rowCounts.length === 0) return points;
 
-    const centerX = 50;
-    const centerY = 70;
-    const maxRadius = 42;
-    const minRadius = rows.length === 1 ? 42 : 20;
-    const radiusStep = rows.length > 1 ? (maxRadius - minRadius) / (rows.length - 1) : 0;
+    const maxRadius = CHAMBER_OUTER_RADIUS;
+    const minRadius = rowCounts.length === 1 ? CHAMBER_OUTER_RADIUS : CHAMBER_INNER_RADIUS;
+    const radiusStep = rowCounts.length > 1 ? (maxRadius - minRadius) / (rowCounts.length - 1) : 0;
     const angleStart = Math.PI * 0.98;
     const angleEnd = Math.PI * 0.02;
 
     let pointer = 0;
-    rows.forEach((count, rowIndex) => {
+    rowCounts.forEach((count, rowIndex) => {
       const radius = maxRadius - rowIndex * radiusStep;
       for (let i = 0; i < count; i += 1) {
         const slot = displaySlots[pointer];
@@ -316,46 +288,65 @@ export default function SeatMap({
         const angle = angleStart + (angleEnd - angleStart) * t;
         points.push({
           slot,
-          x: centerX + radius * Math.cos(angle),
-          y: centerY - radius * Math.sin(angle),
+          x: CHAMBER_CENTER_X + radius * Math.cos(angle),
+          y: CHAMBER_CENTER_Y - radius * Math.sin(angle),
         });
         pointer += 1;
       }
     });
 
     return points;
-  }, [displaySlots]);
+  }, [displaySlots, rowCounts]);
 
-  const seatSize = compact ? 16 : seatPoints.length > 120 ? 20 : 23;
+  const guideRadii = useMemo(() => {
+    if (rowCounts.length === 0) return [];
+    const maxRadius = CHAMBER_OUTER_RADIUS;
+    const minRadius = rowCounts.length === 1 ? CHAMBER_OUTER_RADIUS : CHAMBER_INNER_RADIUS;
+    const radiusStep = rowCounts.length > 1 ? (maxRadius - minRadius) / (rowCounts.length - 1) : 0;
+    return rowCounts
+      .map((_, index) => maxRadius - index * radiusStep)
+      .filter((_, index) => index % 2 === 0 || index === rowCounts.length - 1);
+  }, [rowCounts]);
+
+  const seatSize = compact ? 16 : seatPoints.length > 120 ? 18 : 20;
+
+  const onSeatSelect = (slot: SeatSlot) => {
+    if (!isSeatData(slot)) return;
+    if (onSeatClick) {
+      onSeatClick(slot);
+      return;
+    }
+    router.push(`/results?constituency=${slot.constituencySlug}`);
+  };
 
   return (
-    <div className={compact ? "" : "glass-card p-6 sm:p-7"}>
+    <div className={compact ? "" : "glass-card p-4 sm:p-5"}>
       {!compact && (
         <>
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">Parliament View</p>
-              <h2 className="mt-1 text-base font-black text-slate-900">Rounded Seat Arrangement</h2>
+              <h2 className="mt-1 text-base font-black text-slate-900">Parliament Chamber</h2>
             </div>
-            <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-600">
-              <span className="inline-flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-600">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1">
                 <span className="h-3 w-3 rounded-full bg-emerald-500" /> Won ({wonCount})
               </span>
-              <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1">
                 <span className="h-3 w-3 rounded-full bg-amber-400" /> Leading ({leadingCount})
               </span>
-              <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                 <span className="h-3 w-3 rounded-full bg-slate-300" /> Pending ({pendingCount})
               </span>
             </div>
           </div>
 
           {partyLegend.length > 0 && (
-            <div className="mb-5 flex flex-wrap gap-2.5">
+            <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1">
               {partyLegend.map((party) => (
                 <span
                   key={party.party}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200/75 bg-white/80 px-3 py-1 text-[11px] font-bold text-slate-700"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200/75 bg-white/85 px-3 py-1 text-[11px] font-bold text-slate-700"
                 >
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: party.color }} />
                   {party.party} ({party.total})
@@ -366,93 +357,169 @@ export default function SeatMap({
         </>
       )}
 
-      <div className="relative mx-auto aspect-[2.2/1] w-full max-w-4xl overflow-hidden rounded-3xl border border-white/75 bg-gradient-to-b from-slate-50 to-white/80 p-2.5 sm:p-4">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,rgba(15,23,42,0.06),transparent_50%)]" />
-
-        <div className="relative h-full w-full">
+      <div className="relative mx-auto w-full max-w-[920px] overflow-hidden rounded-[1.4rem] border border-white/80 bg-gradient-to-b from-slate-50 via-white to-slate-100/80">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_93%,rgba(15,23,42,0.08),transparent_58%)]" />
+        <div className="relative aspect-[1.56/1] sm:aspect-[1.86/1] lg:aspect-[2/1]">
           {seatPoints.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center text-center">
-              <div className="rounded-xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-semibold text-slate-500">
+              <div className="rounded-xl border border-slate-200 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-500">
                 No seats matched your search and filters.
               </div>
             </div>
           ) : (
-            seatPoints.map(({ slot, x, y }) => {
-              const key = `${slot.districtId}-${slot.constNumber}`;
-              const isWon = isSeatData(slot) && slot.status === "won";
-              const isLeading = isSeatData(slot) && slot.status === "leading";
-              const partyColor = isSeatData(slot)
-                ? resolvePartyColor(slot.partyShortName, slot.partyColor)
-                : "#d1d5db";
-              const seatColor = isSeatData(slot)
-                ? isWon
-                  ? partyColor
-                  : isLeading
-                    ? withAlpha(partyColor, 0.55)
-                    : "#cbd5e1"
-                : "#d1d5db";
-              const seatBorder = isSeatData(slot) && (isWon || isLeading) ? partyColor : "#cbd5e1";
-              const label = isSeatData(slot)
-                ? `${slot.constituency} — ${slot.partyShortName}${isWon ? " (Won)" : isLeading ? " (Leading)" : ""}`
-                : `${slot.constituency} (Pending)`;
+            <svg
+              viewBox={`0 0 ${CHAMBER_WIDTH} ${CHAMBER_HEIGHT}`}
+              className="absolute inset-0 h-full w-full"
+              role="img"
+              aria-label="Parliament seat arrangement"
+            >
+              <g className="pointer-events-none" aria-hidden="true">
+                {guideRadii.map((radius) => (
+                  <path
+                    key={radius}
+                    d={arcPath(radius)}
+                    fill="none"
+                    stroke={withAlpha("#94a3b8", 0.4)}
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                  />
+                ))}
+              </g>
 
-              const content = (
-                <span
-                  className="absolute -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 hover:scale-110"
-                  style={{
-                    left: `${x}%`,
-                    top: `${y}%`,
-                    width: `${seatSize}px`,
-                    height: `${seatSize}px`,
-                    filter: isWon ? `drop-shadow(0 0 2px ${withAlpha(seatBorder, 0.65)})` : "none",
-                  }}
-                  title={label}
-                  onMouseEnter={(event) => {
-                    if (!isSeatData(slot)) return;
-                    setHoveredSeat(slot);
-                    setTooltipPos({ x: event.clientX, y: event.clientY });
-                  }}
-                  onMouseMove={(event) => {
-                    if (!hoveredSeat) return;
-                    setTooltipPos({ x: event.clientX, y: event.clientY });
-                  }}
-                  onMouseLeave={() => setHoveredSeat(null)}
-                >
-                  <SeatGlyph size={seatSize} fillColor={seatColor} strokeColor={seatBorder} />
-                  {isWon && (
-                    <span
-                      className="absolute -right-1.5 -top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-white text-[10px] font-black leading-none text-white"
-                      style={{ backgroundColor: partyColor }}
-                    >
-                      ✓
-                    </span>
-                  )}
-                </span>
-              );
+              {seatPoints.map(({ slot, x, y }) => {
+                const key = `${slot.districtId}-${slot.constNumber}`;
+                const isWon = isSeatData(slot) && slot.status === "won";
+                const isLeading = isSeatData(slot) && slot.status === "leading";
+                const partyColor = isSeatData(slot)
+                  ? resolvePartyColor(slot.partyShortName, slot.partyColor)
+                  : "#d1d5db";
+                const fillColor = isSeatData(slot)
+                  ? isWon
+                    ? partyColor
+                    : isLeading
+                      ? withAlpha(partyColor, 0.35)
+                      : "#d9e0ea"
+                  : "#d1d5db";
+                const strokeColor = isSeatData(slot) && (isWon || isLeading) ? partyColor : "#94a3b8";
+                const label = isSeatData(slot)
+                  ? `${slot.constituency} — ${slot.partyShortName}${isWon ? " (Won)" : isLeading ? " (Leading)" : ""}`
+                  : `${slot.constituency} (Pending)`;
 
-              if (!isSeatData(slot)) {
-                return <React.Fragment key={key}>{content}</React.Fragment>;
-              }
+                const bodyWidth = seatSize;
+                const bodyHeight = seatSize * 0.52;
+                const bodyY = -seatSize * 0.08;
+                const backWidth = seatSize * 0.74;
+                const backHeight = seatSize * 0.3;
+                const backX = -backWidth / 2;
+                const backY = -seatSize * 0.48;
+                const bodyX = -bodyWidth / 2;
 
-              return (
-                <Link
-                  key={key}
-                  href={`/results?constituency=${slot.constituencySlug}`}
-                  onClick={(event) => {
-                    if (!onSeatClick) return;
-                    event.preventDefault();
-                    onSeatClick(slot);
-                  }}
-                  className="contents"
-                >
-                  {content}
-                </Link>
-              );
-            })
+                return (
+                  <g
+                    key={key}
+                    transform={`translate(${x} ${y})`}
+                    style={{
+                      filter: isWon ? `drop-shadow(0 0 3px ${withAlpha(partyColor, 0.58)})` : undefined,
+                    }}
+                    className={isSeatData(slot) ? "cursor-pointer outline-none" : ""}
+                    tabIndex={isSeatData(slot) ? 0 : -1}
+                    aria-label={label}
+                    onClick={() => onSeatSelect(slot)}
+                    onKeyDown={(event) => {
+                      if (!isSeatData(slot)) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onSeatSelect(slot);
+                      }
+                    }}
+                    onMouseEnter={(event) => {
+                      if (!isSeatData(slot)) return;
+                      setHoveredSeat(slot);
+                      setTooltipPos({ x: event.clientX, y: event.clientY });
+                    }}
+                    onMouseMove={(event) => {
+                      if (!isSeatData(slot)) return;
+                      setTooltipPos({ x: event.clientX, y: event.clientY });
+                    }}
+                    onMouseLeave={() => setHoveredSeat(null)}
+                  >
+                    <rect
+                      x={backX}
+                      y={backY}
+                      width={backWidth}
+                      height={backHeight}
+                      rx={backHeight / 2}
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth={1.2}
+                    />
+                    <rect
+                      x={bodyX}
+                      y={bodyY}
+                      width={bodyWidth}
+                      height={bodyHeight}
+                      rx={bodyHeight / 2}
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth={1.2}
+                    />
+                    <rect
+                      x={-bodyWidth * 0.18}
+                      y={bodyY + bodyHeight * 0.18}
+                      width={bodyWidth * 0.36}
+                      height={bodyHeight * 0.2}
+                      rx={bodyHeight * 0.08}
+                      fill={withAlpha("#ffffff", isWon ? 0.32 : 0.18)}
+                    />
+
+                    {isWon && (
+                      <g transform={`translate(${seatSize * 0.44} ${-seatSize * 0.44})`}>
+                        <circle
+                          r={seatSize * 0.23}
+                          fill={partyColor}
+                          stroke="#ffffff"
+                          strokeWidth={1.5}
+                        />
+                        <text
+                          x={0}
+                          y={seatSize * 0.08}
+                          textAnchor="middle"
+                          fontSize={seatSize * 0.26}
+                          fontWeight={900}
+                          fill="#ffffff"
+                        >
+                          ✓
+                        </text>
+                      </g>
+                    )}
+                    {!isWon && isLeading && (
+                      <circle
+                        cx={seatSize * 0.44}
+                        cy={-seatSize * 0.44}
+                        r={seatSize * 0.14}
+                        fill={partyColor}
+                        stroke="#ffffff"
+                        strokeWidth={1.2}
+                      />
+                    )}
+                    <title>{label}</title>
+                  </g>
+                );
+              })}
+
+              <rect
+                x={CHAMBER_CENTER_X - 56}
+                y={CHAMBER_CENTER_Y + 14}
+                width={112}
+                height={20}
+                rx={10}
+                fill={withAlpha("#0f172a", 0.18)}
+                stroke={withAlpha("#64748b", 0.45)}
+                strokeWidth={1}
+              />
+            </svg>
           )}
         </div>
-
-        <div className="pointer-events-none absolute bottom-1.5 left-1/2 h-6 w-28 -translate-x-1/2 rounded-t-full border border-slate-300/45 bg-slate-900/10 sm:bottom-2 sm:h-7 sm:w-36" />
       </div>
 
       {hoveredSeat && (
