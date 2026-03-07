@@ -225,12 +225,13 @@ const fallbackPhotoByName: Record<string, string> = fallbackCandidates
     return acc;
   }, {} as Record<string, string>);
 
-function getCandidatePhoto(name: string, photo?: string): string {
-  if (photo && photo.startsWith("http")) return photo;
+function getCandidatePhoto(name: string, photo?: string, id?: string): string {
+  if (photo && (photo.startsWith("http") || photo.startsWith("/api/"))) return photo;
   const fallback = fallbackPhotoByName[name];
   if (fallback && fallback.startsWith("http")) return fallback;
   const mapped = candidateImageMap[name]?.remote;
   if (mapped) return mapped;
+  if (id) return `/api/candidate-image/${id}`;
   return fallback ?? photo ?? "";
 }
 
@@ -243,7 +244,7 @@ function normalizeCandidate(raw: APIConstituencyCandidate): LiveCandidate {
     votes: toNumber(raw.votes),
     status: raw.status,
     margin: raw.margin,
-    photo: getCandidatePhoto(raw.name, raw.photo),
+    photo: getCandidatePhoto(raw.name, raw.photo, raw.id),
   };
 }
 
@@ -308,7 +309,7 @@ function fallbackLiveCandidates(): LiveConstituencyResult[] {
       votes: candidate.votes,
       status: candidate.status,
       margin: candidate.margin,
-      photo: getCandidatePhoto(candidate.name, candidate.photo),
+      photo: getCandidatePhoto(candidate.name, candidate.photo, candidate.id),
     })),
     totalVotes: constituency.totalVotes,
     countingStatus: constituency.countingStatus,

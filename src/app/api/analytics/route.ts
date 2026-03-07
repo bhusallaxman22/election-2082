@@ -49,6 +49,7 @@ export async function GET() {
             id: String(c.id), name: c.name as string,
             partyShortName: c.partyShortName as string, partyColor: c.partyColor as string,
             votes: c.votes as number, status: c.status as string, margin: c.margin as number | undefined,
+            photo: (c.photo as string) || `/api/candidate-image/${c.id}`,
           }));
         } catch { /* */ }
         return {
@@ -88,8 +89,8 @@ export async function GET() {
       runnerUpName: s.runnerUpName, runnerUpVotes: s.runnerUpVotes,
       margin: s.margin, totalVotes: s.totalVotes, status: s.status,
       candidates: (s.candidates || []).map((c) => ({
-        name: c.name, party: c.partyShortName, color: c.partyColor,
-        votes: c.votes, status: c.status,
+        id: c.id, name: c.name, party: c.partyShortName, color: c.partyColor,
+        votes: c.votes, status: c.status, photo: c.photo || `/api/candidate-image/${c.id}`,
       })),
     }));
 

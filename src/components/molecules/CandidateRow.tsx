@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import Avatar from "../atoms/Avatar";
 import PartyBadge from "../atoms/PartyBadge";
 import VoteBar from "../atoms/VoteBar";
@@ -35,7 +36,7 @@ export default function CandidateRow({
       <Avatar name={candidate.name} color={candidate.partyColor} size={34} src={photoSrc} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold text-slate-800">{candidate.name}</span>
+          <Link href={`/candidate/${candidate.id}`} className="truncate text-sm font-semibold text-slate-800 hover:text-red-600 transition-colors">{candidate.name}</Link>
           <PartyBadge name={candidate.partyShortName} color={candidate.partyColor} />
           {isWinner && (
             <span className="rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">

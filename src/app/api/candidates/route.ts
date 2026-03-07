@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
             votes: c.votes as number,
             status: c.status as string,
             margin: c.margin as number | undefined,
-            photo: "",
+            photo: (c.photo as string) || `/api/candidate-image/${c.id}`,
           }));
         } catch { /* */ }
 

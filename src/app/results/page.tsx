@@ -4,6 +4,7 @@ import React, { Suspense, useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import PageTemplate from "@/components/templates/PageTemplate";
 import CandidateCard from "@/components/organisms/CandidateCard";
+import Avatar from "@/components/atoms/Avatar";
 import ProportionalResults from "@/components/organisms/ProportionalResults";
 import { useElectionData } from "@/context/ElectionDataContext";
 import { provinces } from "@/data/provinces";
@@ -35,6 +36,7 @@ interface SeatResult {
     votes: number;
     status: "won" | "leading" | "trailing" | "pending";
     margin?: number;
+    photo?: string;
   }[];
 }
 
@@ -259,8 +261,8 @@ function ResultsContent() {
                             <div className="space-y-2">
                               {seat.candidates.slice(0, 4).map((c, i) => (
                                 <div key={c.id} className={`flex items-center gap-2 ${i > 0 ? "opacity-60" : ""}`}>
-                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.partyColor }} />
-                                  <span className="text-xs text-gray-700 truncate flex-1">{c.name}</span>
+                                  <Avatar name={c.name} color={c.partyColor} size={22} src={c.photo || `/api/candidate-image/${c.id}`} />
+                                  <Link href={`/candidate/${c.id}`} className="text-xs text-gray-700 truncate flex-1 hover:text-red-600 transition-colors">{c.name}</Link>
                                   <Link
                                     href={`/analytics?view=party&name=${encodeURIComponent(c.partyShortName)}`}
                                     className="text-[10px] font-medium px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity"

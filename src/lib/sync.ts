@@ -302,6 +302,7 @@ async function syncConstituencies(): Promise<number> {
             symbolName: cd.SymbolName,
             symbolId: cd.SymbolID,
             votes: cd.TotalVoteReceived,
+            photo: `/api/candidate-image/${cd.CandidateID}`,
             status:
               cd.Remarks === "Elected"
                 ? "won"
@@ -318,6 +319,11 @@ async function syncConstituencies(): Promise<number> {
             age: cd.Age,
             rank: cd.Rank,
             remarks: cd.Remarks,
+            dob: cd.DOB,
+            qualification: cd.QUALIFICATION,
+            address: cd.ADDRESS,
+            castedVote: cd.CastedVote,
+            totalVoters: cd.TotalVoters,
           };
         });
 
@@ -500,7 +506,7 @@ async function preWarmRedis(): Promise<void> {
     if (constRows.length > 0) {
       // Build all_results view
       const allResults = constRows.map((r) => {
-        let candidates: { id: string; name: string; partyShortName: string; partyColor: string; votes: number; status: string; margin?: number }[] = [];
+        let candidates: { id: string; name: string; partyShortName: string; partyColor: string; votes: number; status: string; margin?: number; photo: string }[] = [];
         try {
           const raw =
             typeof r.candidates_json === "string"
@@ -514,6 +520,7 @@ async function preWarmRedis(): Promise<void> {
             votes: c.votes as number,
             status: c.status as string,
             margin: c.margin as number | undefined,
+            photo: (c.photo as string) || `/api/candidate-image/${c.id}`,
           }));
         } catch {
           /* */
@@ -562,7 +569,7 @@ async function preWarmRedis(): Promise<void> {
             votes: c.votes as number,
             status: c.status as string,
             margin: c.margin as number | undefined,
-            photo: "",
+            photo: (c.photo as string) || `/api/candidate-image/${c.id}`,
           }));
         } catch {
           /* */

@@ -28,6 +28,7 @@ export interface SeatResult {
     votes: number;
     status: "won" | "leading" | "trailing" | "pending";
     margin?: number;
+    photo: string;
   }[];
 }
 
@@ -75,6 +76,7 @@ export async function GET() {
           votes: c.votes as number,
           status: c.status as string,
           margin: c.margin as number | undefined,
+          photo: (c.photo as string) || `/api/candidate-image/${c.id}`,
         }));
       } catch { /* */ }
 

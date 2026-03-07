@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -10,6 +11,7 @@ import {
 import { Spin } from "antd";
 import { LeftOutlined, RightOutlined, TrophyOutlined, TeamOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import PageTemplate from "@/components/templates/PageTemplate";
+import Avatar from "@/components/atoms/Avatar";
 import Pagination, { usePagination } from "@/components/atoms/Pagination";
 import { useElectionData } from "@/context/ElectionDataContext";
 
@@ -20,7 +22,7 @@ interface Overview {
   counting: number; pending: number; totalVotesCast: number;
 }
 
-interface ConstituencyCandidate { name: string; party: string; color: string; votes: number; status: string }
+interface ConstituencyCandidate { id: string; name: string; party: string; color: string; votes: number; status: string; photo?: string }
 
 interface ConstituencyData {
   districtId: number; constNumber: number; constituencySlug: string;
@@ -180,8 +182,8 @@ function ConstituencyPanel({ data, onBack }: { data: ConstituencyData; onBack: (
               <div key={i}>
                 <div className="mb-0.5 flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: c.color || "#94a3b8" }} />
-                    <span className="font-semibold text-slate-700">{c.name}</span>
+                    <Avatar name={c.name} color={c.color || "#94a3b8"} size={22} src={c.photo || `/api/candidate-image/${c.id}`} />
+                    <Link href={`/candidate/${c.id}`} className="font-semibold text-slate-700 hover:text-red-600 transition-colors">{c.name}</Link>
                     <span className="text-slate-400">({c.party})</span>
                     {c.status === "won" && <TrophyOutlined className="text-amber-500" />}
                   </span>

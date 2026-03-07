@@ -107,6 +107,16 @@ export async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // ── candidate_images ───────────────────────────────────────────────
+  await execute(`
+    CREATE TABLE IF NOT EXISTS candidate_images (
+      candidate_id INT PRIMARY KEY,
+      image_data MEDIUMBLOB NOT NULL,
+      content_type VARCHAR(50) DEFAULT 'image/jpeg',
+      fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   migrated = true;
   console.log("[migrate] Schema ready");
 }
