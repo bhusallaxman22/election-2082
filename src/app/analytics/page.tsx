@@ -2,6 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -14,6 +15,18 @@ import PageTemplate from "@/components/templates/PageTemplate";
 import Avatar from "@/components/atoms/Avatar";
 import Pagination, { usePagination } from "@/components/atoms/Pagination";
 import { useElectionData } from "@/context/ElectionDataContext";
+
+const InteractiveMap = dynamic(
+  () => import("@/components/organisms/InteractiveMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[440px] items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+      </div>
+    ),
+  }
+);
 
 /* ═══════════════ TYPES ═══════════════ */
 
@@ -149,7 +162,15 @@ function sortRows<T>(rows: T[], col: string, dir: SortDir): T[] {
 
 /* ═══════════════ CONSTITUENCY DETAIL ═══════════════ */
 
-function ConstituencyPanel({ data, onBack }: { data: ConstituencyData; onBack: () => void }) {
+function ConstituencyPanel({
+  data,
+  onBack,
+  onDistrict,
+}: {
+  data: ConstituencyData;
+  onBack: () => void;
+  onDistrict: (districtId: number, provinceId: number) => void;
+}) {
   const top = data.candidates.slice(0, 8);
   const maxV = Math.max(...top.map((c) => c.votes), 1);
 
@@ -172,6 +193,26 @@ function ConstituencyPanel({ data, onBack }: { data: ConstituencyData; onBack: (
             <p className="mt-0.5 text-sm font-bold text-slate-800">{c.v}</p>
           </div>
         ))}
+      </div>
+
+      <div className="glass-card overflow-hidden">
+        <div className="border-b border-slate-100 px-5 py-3.5">
+          <h4 className="text-sm font-bold text-slate-900">Constituency Focus Map</h4>
+          <p className="mt-0.5 text-[11px] text-slate-400">Showing only the selected constituency area context</p>
+        </div>
+        <InteractiveMap
+          provinceId={data.provinceId}
+          height={360}
+          showProvinceBorders={false}
+          showLabels
+          selectedDistrictId={data.districtId}
+          fitMaxZoom={12}
+          fitPadding={[6, 6]}
+          onDistrictClick={(districtId, _name, _constituencies, provinceId) => onDistrict(districtId, provinceId)}
+        />
+        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-xs text-slate-600">
+          Active: <span className="font-bold text-slate-800">{data.constituency}</span>
+        </div>
       </div>
 
       {top.length > 0 && (
@@ -394,9 +435,117 @@ function PartyDetail({ party, onBack, onConstituency }: {
 
 /* ═══════════════ PROVINCE DETAIL ═══════════════ */
 
-function ProvinceDetail({ province, onBack, onConstituency, onParty }: {
+function ProvinceDrillMap({
+  province,
+  onConstituency,
+  initialSelectedDistrictId,
+}: {
+  province: ProvinceBreakdown;
+  onConstituency: (d: number, c: number) => void;
+  initialSelectedDistrictId?: number | null;
+}) {
+  const [selectedDistrictId, setSelectedDistrictId] = useState<number | null>(initialSelectedDistrictId ?? null);
+
+  useEffect(() => {
+    setSelectedDistrictId(initialSelectedDistrictId ?? null);
+  }, [initialSelectedDistrictId, province.provinceId]);
+
+  const districtVoteMap = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const c of province.constituencies) {
+      map[c.districtId] = (map[c.districtId] || 0) + (c.totalVotes || 0);
+    }
+    return map;
+  }, [province.constituencies]);
+
+  const heatMax = useMemo(() => Math.max(0, ...Object.values(districtVoteMap)), [districtVoteMap]);
+
+  const districtGroups = useMemo(() => {
+    const groups = new Map<number, { districtId: number; district: string; constNumbers: number[] }>();
+    for (const c of province.constituencies) {
+      const existing = groups.get(c.districtId);
+      if (!existing) {
+        groups.set(c.districtId, {
+          districtId: c.districtId,
+          district: c.district,
+          constNumbers: [c.constNumber],
+        });
+      } else if (!existing.constNumbers.includes(c.constNumber)) {
+        existing.constNumbers.push(c.constNumber);
+      }
+    }
+    return Array.from(groups.values())
+      .map((g) => ({ ...g, constNumbers: g.constNumbers.sort((a, b) => a - b) }))
+      .sort((a, b) => a.district.localeCompare(b.district));
+  }, [province.constituencies]);
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="border-b border-slate-100 px-5 py-3.5">
+        <h4 className="text-sm font-bold text-slate-900">Province Map Drill-down</h4>
+        <p className="mt-0.5 text-[11px] text-slate-400">Heatmap by district votes. Click district, then constituency.</p>
+        <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-500">
+          <span className="inline-block h-2 w-6 rounded-sm bg-[#dbeafe]" /> Low
+          <span className="inline-block h-2 w-6 rounded-sm bg-[#60a5fa]" /> Medium
+          <span className="inline-block h-2 w-6 rounded-sm bg-[#1d4ed8]" /> High
+          <span className="ml-1 font-semibold">Peak: {fmt(heatMax)} votes</span>
+        </div>
+      </div>
+
+      <InteractiveMap
+        provinceId={province.provinceId}
+        height={440}
+        showProvinceBorders={false}
+        showLabels
+        showHeatmap
+        districtValueMap={districtVoteMap}
+        fitMaxZoom={11}
+        fitPadding={[8, 8]}
+        selectedDistrictId={selectedDistrictId}
+        onDistrictClick={(districtId) => setSelectedDistrictId((prev) => (prev === districtId ? null : districtId))}
+      />
+
+      <div className="border-t border-slate-100 bg-slate-50/60 p-5">
+        {!selectedDistrictId && (
+          <p className="text-xs text-slate-500">Select a district on the map to see constituency links.</p>
+        )}
+
+        {selectedDistrictId && (() => {
+          const district = districtGroups.find((d) => d.districtId === selectedDistrictId);
+          if (!district) return null;
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-200 text-[11px] font-bold text-slate-700">{district.constNumbers.length}</span>
+                <h5 className="text-sm font-bold text-slate-900">{district.district}</h5>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {district.constNumbers.map((constNumber) => (
+                  <button
+                    key={constNumber}
+                    onClick={() => onConstituency(district.districtId, constNumber)}
+                    className="group inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:shadow-sm"
+                  >
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                      {constNumber}
+                    </span>
+                    {district.district}-{constNumber}
+                    <RightOutlined className="text-[10px] text-slate-300 group-hover:text-red-500" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
+function ProvinceDetail({ province, onBack, onConstituency, onParty, selectedDistrictId }: {
   province: ProvinceBreakdown; onBack: () => void;
   onConstituency: (d: number, c: number) => void; onParty: (p: string) => void;
+  selectedDistrictId?: number | null;
 }) {
   const partyChart = province.parties.slice(0, 10).map((p) => ({
     name: p.party, wins: p.wins, leads: p.leads, color: p.color,
@@ -437,6 +586,12 @@ function ProvinceDetail({ province, onBack, onConstituency, onParty }: {
           </div>
         ))}
       </div>
+
+      <ProvinceDrillMap
+        province={province}
+        onConstituency={onConstituency}
+        initialSelectedDistrictId={selectedDistrictId}
+      />
 
       {/* Party chart */}
       {partyChart.length > 0 && (
@@ -845,6 +1000,7 @@ function AnalyticsPageInner() {
   const [view, setView] = useState<DrillView>({ type: "overview" });
   const [history, setHistory] = useState<DrillView[]>([]);
   const [urlApplied, setUrlApplied] = useState(false);
+  const [selectedProvinceDistrictId, setSelectedProvinceDistrictId] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -906,6 +1062,8 @@ function AnalyticsPageInner() {
       const id = Number(searchParams.get("id"));
       if (id && data.provinceBreakdown.some((p) => p.provinceId === id)) {
         setView({ type: "province", provinceId: id });
+        const districtId = Number(searchParams.get("district"));
+        setSelectedProvinceDistrictId(Number.isFinite(districtId) && districtId > 0 ? districtId : null);
       }
     } else if (viewParam === "constituency") {
       const slug = searchParams.get("id") || "";
@@ -919,6 +1077,7 @@ function AnalyticsPageInner() {
   const navigate = useCallback((next: DrillView) => {
     setHistory((h) => [...h, view]);
     setView(next);
+    if (next.type !== "province") setSelectedProvinceDistrictId(null);
     router.replace(viewToUrl(next, data), { scroll: false });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [view, data, router]);
@@ -936,7 +1095,39 @@ function AnalyticsPageInner() {
 
   const onC = useCallback((d: number, c: number) => navigate({ type: "constituency", districtId: d, constNumber: c }), [navigate]);
   const onParty = useCallback((p: string) => navigate({ type: "party", party: p }), [navigate]);
-  const onProvince = useCallback((id: number) => navigate({ type: "province", provinceId: id }), [navigate]);
+  const onProvince = useCallback((id: number) => {
+    setSelectedProvinceDistrictId(null);
+    navigate({ type: "province", provinceId: id });
+  }, [navigate]);
+  const onDistrictFromConstituency = useCallback((districtId: number, provinceId: number) => {
+    if (!correctedData) {
+      setHistory((h) => [...h, view]);
+      setSelectedProvinceDistrictId(districtId);
+      setView({ type: "province", provinceId });
+      router.replace(`/analytics?view=province&id=${provinceId}&district=${districtId}`, { scroll: false });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    const inDistrict = correctedData.provinceBreakdown
+      .flatMap((p) => p.constituencies)
+      .filter((c) => c.districtId === districtId)
+      .sort((a, b) => a.constNumber - b.constNumber);
+
+    // If the district has exactly one constituency, go directly there.
+    if (inDistrict.length === 1) {
+      const only = inDistrict[0];
+      navigate({ type: "constituency", districtId: only.districtId, constNumber: only.constNumber });
+      return;
+    }
+
+    // Otherwise keep province drill-down with district selected.
+    setHistory((h) => [...h, view]);
+    setSelectedProvinceDistrictId(districtId);
+    setView({ type: "province", provinceId });
+    router.replace(`/analytics?view=province&id=${provinceId}&district=${districtId}`, { scroll: false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [correctedData, view, router, navigate]);
 
   const findConstituency = useCallback((source: AnalyticsData | null, d: number, c: number): ConstituencyData | null => {
     if (!source) return null;
@@ -1024,12 +1215,12 @@ function AnalyticsPageInner() {
 
       {correctedData && view.type === "province" && (() => {
         const p = correctedData.provinceBreakdown.find((pb) => pb.provinceId === (view as { provinceId: number }).provinceId);
-        return p ? <ProvinceDetail province={p} onBack={goBack} onConstituency={onC} onParty={onParty} /> : <p className="py-12 text-center text-slate-400">Province not found</p>;
+        return p ? <ProvinceDetail province={p} onBack={goBack} onConstituency={onC} onParty={onParty} selectedDistrictId={selectedProvinceDistrictId} /> : <p className="py-12 text-center text-slate-400">Province not found</p>;
       })()}
 
       {correctedData && view.type === "constituency" && (() => {
         const c = findConstituency(correctedData, (view as { districtId: number }).districtId, (view as { constNumber: number }).constNumber);
-        return c ? <ConstituencyPanel data={c} onBack={goBack} /> : <p className="py-12 text-center text-slate-400">Constituency not found</p>;
+        return c ? <ConstituencyPanel data={c} onBack={goBack} onDistrict={onDistrictFromConstituency} /> : <p className="py-12 text-center text-slate-400">Constituency not found</p>;
       })()}
     </PageTemplate>
   );

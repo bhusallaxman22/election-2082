@@ -12,8 +12,9 @@ interface ProvinceCardProps {
 
 export default function ProvinceCard({ province, liveResults }: ProvinceCardProps) {
   const results = liveResults ?? [];
+  const totalSeats = province.totalSeats || province.districts.reduce((s, d) => s + d.constituencies, 0);
   const totalLeads = results.reduce((s, r) => s + r.leads + r.wins, 0);
-  const pct = province.totalSeats > 0 ? ((totalLeads / province.totalSeats) * 100).toFixed(0) : "0";
+  const pct = totalSeats > 0 ? ((totalLeads / totalSeats) * 100).toFixed(0) : "0";
 
   return (
     <Link href={`/analytics?view=province&id=${province.id}`} className="block group">
@@ -30,7 +31,7 @@ export default function ProvinceCard({ province, liveResults }: ProvinceCardProp
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-bold text-slate-900">{province.name}</h3>
             <p className="mt-0.5 text-xs text-slate-500">
-              {province.districts.length} districts · {province.totalSeats} seats
+              {province.districts.length} districts · {totalSeats} seats
             </p>
           </div>
           <div className="text-right">
@@ -48,12 +49,13 @@ export default function ProvinceCard({ province, liveResults }: ProvinceCardProp
                   key={i}
                   className="h-full transition-all duration-500"
                   style={{
-                    width: `${((r.leads + r.wins) / province.totalSeats) * 100}%`,
+                    width: `${((r.leads + r.wins) / totalSeats) * 100}%`,
                     backgroundColor: r.partyColor,
                   }}
                 />
               ))}
           </div>
+          <p className="mt-2 text-[10px] font-semibold text-slate-500">{totalLeads} of {totalSeats} counted</p>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
             {results
               .filter((r) => r.leads > 0 || r.wins > 0)

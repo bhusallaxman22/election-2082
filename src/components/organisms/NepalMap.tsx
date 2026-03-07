@@ -1,9 +1,23 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { provinces } from "@/data/provinces";
+import { useElectionData } from "@/context/ElectionDataContext";
 import type { LiveCandidate } from "@/context/ElectionDataContext";
+
+const InteractiveMap = dynamic(
+  () => import("@/components/organisms/InteractiveMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[360px] items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+      </div>
+    ),
+  }
+);
 
 // Province color palette (fill + darker hover)
 const PROVINCE_COLORS: Record<number, { fill: string; hover: string }> = {
@@ -14,14 +28,6 @@ const PROVINCE_COLORS: Record<number, { fill: string; hover: string }> = {
   5: { fill: "#f4c2f1", hover: "#ea9ce6" },
   6: { fill: "#ffe380", hover: "#ffda4d" },
   7: { fill: "#bcc0e7", hover: "#9da2d8" },
-};
-
-// SVG IDs 77 & 78 duplicate 45 & 52 (pre-split GeoJSON); skip rendering them
-const SPLIT_SVG_IDS = new Set([77, 78]);
-// When clicking the unsplit polygon, show both East/West halves
-const SPLIT_DISTRICTS: Record<number, number[]> = {
-  45: [45, 77], // Nawalparasi East + West
-  52: [52, 78], // Rukum East + West
 };
 
 interface DistrictInfo {
@@ -44,6 +50,7 @@ interface ConstituencyDetail {
 
 export default function NepalMap() {
   const router = useRouter();
+  const { provinceResults } = useElectionData();
 
   // Flat district lookup built once from provinces data
   const districtMap = useMemo(() => {
@@ -63,10 +70,7 @@ export default function NepalMap() {
     return map;
   }, []);
 
-  const [hoveredDistrict, setHoveredDistrict] = useState<number | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<number | null>(null);
-  const [districtPaths, setDistrictPaths] = useState<Record<number, string>>({});
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Constituency drill-down
   const [selectedConstituency, setSelectedConstituency] = useState<{
@@ -76,27 +80,6 @@ export default function NepalMap() {
   } | null>(null);
   const [constDetail, setConstDetail] = useState<ConstituencyDetail | null>(null);
   const [constLoading, setConstLoading] = useState(false);
-
-  // Load district SVG paths
-  useEffect(() => {
-    fetch("/assets/images/np-districts.svg")
-      .then((res) => res.text())
-      .then((text) => {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(text, "image/svg+xml");
-        const paths: Record<number, string> = {};
-        doc.querySelectorAll("path[id]").forEach((el) => {
-          const id = el.getAttribute("id");
-          const d = el.getAttribute("d");
-          if (id && d) {
-            const numId = parseInt(id.replace("d", ""), 10);
-            if (!isNaN(numId)) paths[numId] = d;
-          }
-        });
-        setDistrictPaths(paths);
-      })
-      .catch(() => {});
-  }, []);
 
   // Fetch constituency detail when a seat is clicked
   useEffect(() => {
@@ -144,28 +127,16 @@ export default function NepalMap() {
     []
   );
 
-  const hasLoaded = Object.keys(districtPaths).length > 0;
-
-  // Districts shown in the detail panel (handles split districts)
+  // Districts shown in the detail panel
   const activeDistricts = useMemo(() => {
     if (!selectedDistrict) return [];
-    const ids = SPLIT_DISTRICTS[selectedDistrict] || [selectedDistrict];
-    return ids.map((id) => districtMap[id]).filter(Boolean);
+    return [districtMap[selectedDistrict]].filter(Boolean);
   }, [selectedDistrict, districtMap]);
 
   const activeProvince = useMemo(() => {
     if (!activeDistricts.length) return null;
     return provinces.find((p) => p.id === activeDistricts[0].provinceId) || null;
   }, [activeDistricts]);
-
-  const hoveredInfo = hoveredDistrict ? districtMap[hoveredDistrict] : null;
-
-  // IDs to render (skip duplicate split polygons d77/d78)
-  const renderableIds = useMemo(() => {
-    return Object.keys(districtPaths)
-      .map(Number)
-      .filter((id) => !SPLIT_SVG_IDS.has(id));
-  }, [districtPaths]);
 
   return (
     <div>
@@ -191,78 +162,16 @@ export default function NepalMap() {
       <div className="flex flex-col lg:flex-row gap-5">
         {/* Map */}
         <div className="flex-1 relative">
-          {!hasLoaded ? (
-            <div className="flex h-[320px] items-center justify-center">
-              <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-            </div>
-          ) : (
-            <svg
-              viewBox="0 0 1000 569"
-              className="w-full h-auto"
-              xmlns="http://www.w3.org/2000/svg"
-              onMouseMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-              }}
-            >
-              {renderableIds.map((dId) => {
-                const pathD = districtPaths[dId];
-                const info = districtMap[dId];
-                if (!pathD || !info) return null;
-
-                const colors = PROVINCE_COLORS[info.provinceId];
-                if (!colors) return null;
-
-                const isHovered = hoveredDistrict === dId;
-                const isSelected = selectedDistrict === dId;
-                const isSameProvince = selectedDistrict
-                  ? districtMap[selectedDistrict]?.provinceId === info.provinceId
-                  : false;
-
-                return (
-                  <path
-                    key={dId}
-                    d={pathD}
-                    fill={
-                      isSelected ? colors.hover
-                        : isHovered ? colors.hover
-                          : isSameProvince ? `${colors.fill}dd`
-                            : colors.fill
-                    }
-                    stroke={isSelected ? "#374151" : "#fff"}
-                    strokeWidth={isSelected ? "1.8" : "0.5"}
-                    strokeLinejoin="round"
-                    className="cursor-pointer transition-colors duration-150"
-                    onMouseEnter={() => setHoveredDistrict(dId)}
-                    onMouseLeave={() => setHoveredDistrict(null)}
-                    onClick={() => handleDistrictClick(dId)}
-                  />
-                );
-              })}
-            </svg>
-          )}
-
-          {/* Hover tooltip */}
-          {hoveredInfo && !selectedDistrict && (
-            <div
-              className="absolute z-10 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 shadow-md text-xs animate-fade-in pointer-events-none"
-              style={{
-                left: Math.min(mousePos.x + 12, 280),
-                top: mousePos.y - 10,
-              }}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className="w-3 h-3 rounded-sm"
-                  style={{ backgroundColor: PROVINCE_COLORS[hoveredInfo.provinceId]?.fill }}
-                />
-                <span className="font-semibold text-gray-900">{hoveredInfo.name}</span>
-              </div>
-              <div className="text-gray-500">
-                {hoveredInfo.provinceName} · {hoveredInfo.constituencies} {hoveredInfo.constituencies === 1 ? "constituency" : "constituencies"}
-              </div>
-            </div>
-          )}
+          <InteractiveMap
+            onDistrictClick={(districtId, _name, _constituencies) => {
+              handleDistrictClick(districtId);
+            }}
+            selectedDistrictId={selectedDistrict}
+            showProvinceBorders
+            fitMaxZoom={9}
+            fitPadding={[16, 16]}
+            height={360}
+          />
         </div>
 
         {/* Detail panel */}
@@ -317,8 +226,17 @@ export default function NepalMap() {
                     <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-2">
                       Province: {prov.name}
                     </div>
+                    {(() => {
+                      const live = provinceResults[prov.id] ?? [];
+                      const computed = live.length > 0 ? live : prov.partyResults;
+                      const counted = computed.reduce((s, r) => s + r.leads + r.wins, 0);
+                      const totalSeats = prov.totalSeats || prov.districts.reduce((s, d) => s + d.constituencies, 0);
+                      return (
+                        <div className="mb-2 text-xs text-gray-500 font-medium">{counted} of {totalSeats} seats counted</div>
+                      );
+                    })()}
                     <div className="flex rounded-md overflow-hidden h-2.5 bg-gray-100 mb-2.5">
-                      {prov.partyResults
+                      {(provinceResults[prov.id] ?? prov.partyResults)
                         .filter((r) => r.leads > 0 || r.wins > 0)
                         .map((r, i) => (
                           <div
@@ -332,7 +250,7 @@ export default function NepalMap() {
                         ))}
                     </div>
                     <div className="space-y-1.5">
-                      {prov.partyResults
+                      {(provinceResults[prov.id] ?? prov.partyResults)
                         .filter((r) => r.leads > 0 || r.wins > 0)
                         .map((r, i) => (
                           <div key={i} className="flex items-center justify-between">
@@ -344,7 +262,7 @@ export default function NepalMap() {
                           </div>
                         ))}
                     </div>
-                    <div className="mt-2 text-xs text-gray-400">{totalLeads} of {prov.totalSeats} seats counted</div>
+                    <div className="mt-2 text-xs text-gray-400">{totalLeads} of {prov.totalSeats || prov.districts.reduce((s, d) => s + d.constituencies, 0)} seats counted</div>
                   </div>
                 );
               })()}

@@ -10,6 +10,16 @@ import VoteBar from "@/components/atoms/VoteBar";
 import { provinces } from "@/data/provinces";
 import type { DistrictData } from "@/data/provinces";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const ProvinceMapPanel = dynamic(
+  () => import("@/components/organisms/ProvinceMapPanel"),
+  { ssr: false, loading: () => (
+    <div className="card flex h-[440px] items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+    </div>
+  )},
+);
 
 interface LiveCandidate {
   id: string;
@@ -295,6 +305,11 @@ export default function ProvinceDetailPage() {
         </div>
       </div>
 
+      {/* Full-width Province Map with District & Constituency Zones */}
+      <div className="mt-6 animate-fade-in">
+        <ProvinceMapPanel provinceId={province.id} />
+      </div>
+
       {/* Top Counting & Neck and Neck - shown by default */}
       {!seatsLoading && (topCounting.length > 0 || neckAndNeck.length > 0) && (
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
@@ -450,7 +465,7 @@ export default function ProvinceDetailPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div id="live-results" className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Party Results — Left column */}
         <div className="lg:col-span-1">
           <div className="card p-5 lg:sticky lg:top-20">
@@ -504,7 +519,7 @@ export default function ProvinceDetailPage() {
         <div className="lg:col-span-2 space-y-3">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-1 h-5 bg-blue-500 rounded-full" />
-            <h2 className="text-sm font-bold text-gray-800">Districts & Constituencies</h2>
+            <h2 className="text-sm font-bold text-gray-800">Live Constituency Results</h2>
             <span className="ml-auto text-xs text-gray-400">Click a seat to view live results</span>
           </div>
 

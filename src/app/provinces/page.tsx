@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import PageTemplate from "@/components/templates/PageTemplate";
 import ProvinceCard from "@/components/organisms/ProvinceCard";
 import GlassCard from "@/components/atoms/GlassCard";
@@ -8,7 +10,20 @@ import StatNumber from "@/components/atoms/StatNumber";
 import { provinces } from "@/data/provinces";
 import { useElectionData } from "@/context/ElectionDataContext";
 
+const InteractiveMap = dynamic(
+  () => import("@/components/organisms/InteractiveMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[460px] items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+      </div>
+    ),
+  }
+);
+
 export default function ProvincesPage() {
+  const router = useRouter();
   const { provinceResults } = useElectionData();
   const totalSeats = provinces.reduce((s, p) => s + p.totalSeats, 0);
   const totalDistricts = provinces.reduce((s, p) => s + p.districts.length, 0);
@@ -50,6 +65,25 @@ export default function ProvincesPage() {
               </div>
             </div>
           </div>
+        </GlassCard>
+      </div>
+
+      {/* Nepal Map with Province Drilling */}
+      <div className="mt-6 animate-fade-in">
+        <GlassCard className="overflow-hidden" padding="p-0">
+          <div className="border-b border-slate-100 px-5 py-3.5">
+            <h3 className="text-sm font-bold text-slate-900">Nepal Province Map</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Click any province area to open analytics drill-down
+            </p>
+          </div>
+          <InteractiveMap
+            height={460}
+            showProvinceBorders
+            onProvinceClick={(provinceId) => {
+              router.push(`/analytics?view=province&id=${provinceId}`);
+            }}
+          />
         </GlassCard>
       </div>
 
