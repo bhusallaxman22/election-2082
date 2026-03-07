@@ -21,7 +21,6 @@ export default function Footer() {
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Navigate</p>
             <div className="mt-3 flex flex-col gap-2.5">
               <Link href="/results" className="text-sm font-semibold text-slate-300 transition-colors hover:text-white">Results</Link>
-              <Link href="/candidates" className="text-sm font-semibold text-slate-300 transition-colors hover:text-white">Candidates</Link>
               <Link href="/parties" className="text-sm font-semibold text-slate-300 transition-colors hover:text-white">Parties</Link>
               <Link href="/provinces" className="text-sm font-semibold text-slate-300 transition-colors hover:text-white">Provinces</Link>
             </div>

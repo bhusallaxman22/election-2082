@@ -21,6 +21,7 @@ export default function PartyRow({ party, maxLeads }: PartyRowProps) {
           ? "border-white/70 bg-white/65 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
           : "border-slate-100 bg-white/45 opacity-80"
       }`}
+      style={{ borderLeftWidth: 4, borderLeftColor: party.color }}
     >
       <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/75 bg-white shadow-sm">
         {!imageFailed && party.logo ? (

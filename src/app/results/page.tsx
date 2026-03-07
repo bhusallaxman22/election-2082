@@ -8,6 +8,7 @@ import ProportionalResults from "@/components/organisms/ProportionalResults";
 import { useElectionData } from "@/context/ElectionDataContext";
 import { provinces } from "@/data/provinces";
 import Link from "next/link";
+import Pagination, { usePagination } from "@/components/atoms/Pagination";
 
 interface SeatResult {
   districtId: number;
@@ -124,6 +125,10 @@ function ResultsContent() {
     (c) => c.totalVotes > 0
   );
 
+  const sortedFiltered = useMemo(() => filteredSeats.sort((a, b) => b.leaderVotes - a.leaderVotes), [filteredSeats]);
+  const filteredPg = usePagination(sortedFiltered, 18);
+  const activePg = usePagination(activeConstituencies, 18);
+
   return (
     <PageTemplate>
       <div className="animate-fade-in">
@@ -222,10 +227,9 @@ function ResultsContent() {
                     {filterTitle} ({filteredSeats.length})
                   </h2>
                 </div>
+                <Pagination page={filteredPg.page} totalPages={filteredPg.totalPages} onPageChange={filteredPg.setPage} totalItems={filteredPg.totalItems} pageSize={filteredPg.pageSize} onPageSizeChange={filteredPg.setPageSize} />
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 stagger-children">
-                  {filteredSeats
-                    .sort((a, b) => b.leaderVotes - a.leaderVotes)
-                    .map((seat) => {
+                  {filteredPg.pageItems.map((seat) => {
                       const isWon = seat.status === "won";
                       return (
                         <div key={`${seat.districtId}-${seat.constNumber}`} className="card group hover:shadow-lg transition-all">
@@ -235,7 +239,7 @@ function ResultsContent() {
                               <div>
                                 <h3 className="text-sm font-semibold text-gray-900">{seat.constituency}</h3>
                                 <p className="text-[10px] text-gray-400 mt-0.5">
-                                  <Link href={`/provinces/${seat.provinceId}`} className="hover:text-gray-600">
+                                  <Link href={`/analytics?view=province&id=${seat.provinceId}`} className="hover:text-gray-600">
                                     {seat.provinceName}
                                   </Link>
                                 </p>
@@ -258,7 +262,7 @@ function ResultsContent() {
                                   <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.partyColor }} />
                                   <span className="text-xs text-gray-700 truncate flex-1">{c.name}</span>
                                   <Link
-                                    href={`/parties/${c.partyShortName.toLowerCase()}`}
+                                    href={`/analytics?view=party&name=${encodeURIComponent(c.partyShortName)}`}
                                     className="text-[10px] font-medium px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity"
                                     style={{ backgroundColor: `${c.partyColor}15`, color: c.partyColor }}
                                   >
@@ -283,6 +287,7 @@ function ResultsContent() {
                       );
                     })}
                 </div>
+
               </>
             ) : (
               <div className="card p-12 text-center">
@@ -316,7 +321,7 @@ function ResultsContent() {
                     return (
                       <Link
                         key={party.id}
-                        href={`/parties/${partySlug}`}
+                        href={`/analytics?view=party&name=${encodeURIComponent(party.shortName)}`}
                         className="flex items-center gap-4 p-2 rounded-xl hover:bg-gray-50 transition-colors"
                       >
                         <img
@@ -373,7 +378,7 @@ function ResultsContent() {
                       <th className="text-center py-3.5 px-5 text-sm text-gray-500 font-medium">Seats</th>
                       {["RSP", "CPN-UML", "NC", "NCP", "Others"].map((p) => (
                         <th key={p} className="text-center py-3.5 px-5 text-sm text-gray-500 font-medium">
-                          <Link href={`/parties/${p.toLowerCase().replace(/[\s()]/g, "-")}`} className="hover:text-gray-900 transition-colors">
+                          <Link href={`/analytics?view=party&name=${encodeURIComponent(p)}`} className="hover:text-gray-900 transition-colors">
                             {p}
                           </Link>
                         </th>
@@ -384,7 +389,7 @@ function ResultsContent() {
                     {provinces.map((prov) => (
                       <tr key={prov.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                         <td className="py-3.5 px-5">
-                          <Link href={`/provinces/${prov.id}`} className="flex items-center gap-3 hover:opacity-80">
+                          <Link href={`/analytics?view=province&id=${prov.id}`} className="flex items-center gap-3 hover:opacity-80">
                             <span className="w-4 h-4 rounded-sm" style={{ backgroundColor: prov.color }} />
                             <span className="text-sm text-gray-700 font-medium">{prov.name}</span>
                           </Link>
@@ -398,7 +403,7 @@ function ResultsContent() {
                             <td key={partyName} className="text-center py-3.5 px-5 text-sm">
                               {val > 0 ? (
                                 <Link
-                                  href={`/parties/${partyName.toLowerCase().replace(/[\s()]/g, "-")}`}
+                                  href={`/analytics?view=party&name=${encodeURIComponent(partyName)}`}
                                   className="font-medium text-gray-800 hover:text-red-600 transition-colors"
                                 >
                                   {val}
@@ -423,8 +428,9 @@ function ResultsContent() {
                   <h2 className="text-lg font-bold text-gray-900">Active Counting</h2>
                   <span className="text-sm text-gray-400">{activeConstituencies.length} active</span>
                 </div>
+                <Pagination page={activePg.page} totalPages={activePg.totalPages} onPageChange={activePg.setPage} totalItems={activePg.totalItems} pageSize={activePg.pageSize} onPageSizeChange={activePg.setPageSize} />
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 stagger-children">
-                  {activeConstituencies.map((result) => (
+                  {activePg.pageItems.map((result) => (
                     <CandidateCard key={result.constituencySlug} result={result} />
                   ))}
                 </div>

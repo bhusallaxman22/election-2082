@@ -462,8 +462,8 @@ export default function SeatMap({
   };
 
   const onPRSeatClick = (seat: PRSeat) => {
-    if (seat.partySlug) {
-      router.push(`/parties/${seat.partySlug}`);
+    if (seat.partyShortName) {
+      router.push(`/analytics?view=party&name=${encodeURIComponent(seat.partyShortName)}`);
     }
   };
 

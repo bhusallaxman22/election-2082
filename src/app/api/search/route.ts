@@ -1,0 +1,194 @@
+import { NextRequest, NextResponse } from "next/server";
+import { cacheGet } from "@/lib/redis";
+import { query } from "@/lib/db";
+import { ensureSchema } from "@/lib/migrate";
+import type { SeatResult } from "@/app/api/all-results/route";
+
+export const dynamic = "force-dynamic";
+
+interface SearchResult {
+  type: "candidate" | "party" | "constituency" | "district" | "province";
+  title: string;
+  subtitle: string;
+  href: string;
+  meta?: string;
+  color?: string;
+}
+
+const PROV_NAMES: Record<number, string> = {
+  1: "Koshi", 2: "Madhesh", 3: "Bagmati", 4: "Gandaki",
+  5: "Lumbini", 6: "Karnali", 7: "Sudurpaschim",
+};
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const q = (searchParams.get("q") || "").trim().toLowerCase();
+
+  if (q.length < 2) {
+    return NextResponse.json({ success: true, results: [] });
+  }
+
+  try {
+    const results: SearchResult[] = [];
+
+    // Fetch all constituency results
+    let seats: SeatResult[] | null = await cacheGet<SeatResult[]>("all_results");
+
+    if (!seats) {
+      await ensureSchema();
+      const rows = await query<{
+        district_id: number;
+        const_number: number;
+        district_name: string;
+        constituency_name: string;
+        constituency_slug: string;
+        province_id: number;
+        province_name: string;
+        leader_party: string;
+        leader_party_color: string;
+        leader_name: string;
+        leader_votes: number;
+        runner_up_name: string;
+        runner_up_votes: number;
+        margin: number;
+        total_votes: number;
+        status: string;
+        candidates_json: string;
+      }>("SELECT * FROM constituency_results ORDER BY province_id, district_id, const_number");
+
+      seats = rows.map((r) => {
+        let candidates: SeatResult["candidates"] = [];
+        try {
+          const raw = typeof r.candidates_json === "string" ? JSON.parse(r.candidates_json) : r.candidates_json;
+          candidates = (raw || []).slice(0, 5).map((c: Record<string, unknown>) => ({
+            id: String(c.id),
+            name: c.name as string,
+            partyShortName: c.partyShortName as string,
+            partyColor: c.partyColor as string,
+            votes: c.votes as number,
+            status: c.status as string,
+            margin: c.margin as number | undefined,
+          }));
+        } catch { /* */ }
+
+        return {
+          districtId: r.district_id,
+          constNumber: r.const_number,
+          districtName: r.district_name,
+          constituency: r.constituency_name,
+          constituencySlug: r.constituency_slug,
+          provinceId: r.province_id,
+          provinceName: r.province_name,
+          partyShortName: r.leader_party,
+          partyColor: r.leader_party_color,
+          leaderName: r.leader_name,
+          leaderVotes: r.leader_votes,
+          runnerUpName: r.runner_up_name,
+          runnerUpVotes: r.runner_up_votes,
+          margin: r.margin,
+          totalVotes: r.total_votes,
+          status: r.status as SeatResult["status"],
+          candidates,
+        };
+      });
+    }
+
+    // Search candidates
+    const seenCandidates = new Set<string>();
+    for (const seat of seats) {
+      for (const c of seat.candidates || []) {
+        if (c.name?.toLowerCase().includes(q) && !seenCandidates.has(c.name)) {
+          seenCandidates.add(c.name);
+          results.push({
+            type: "candidate",
+            title: c.name,
+            subtitle: `${c.partyShortName} · ${seat.constituency}`,
+            href: `/analytics?view=constituency&id=${seat.constituencySlug}`,
+            meta: c.status === "won" ? "Winner" : c.status === "leading" ? "Leading" : `${(c.votes || 0).toLocaleString()} votes`,
+            color: c.partyColor,
+          });
+        }
+      }
+      // Also search leader/runner-up names
+      if (seat.leaderName?.toLowerCase().includes(q) && !seenCandidates.has(seat.leaderName)) {
+        seenCandidates.add(seat.leaderName);
+        results.push({
+          type: "candidate",
+          title: seat.leaderName,
+          subtitle: `${seat.partyShortName} · ${seat.constituency}`,
+          href: `/analytics?view=constituency&id=${seat.constituencySlug}`,
+          meta: seat.status === "won" ? "Winner" : "Leading",
+          color: seat.partyColor,
+        });
+      }
+    }
+
+    // Search parties
+    const partySet = new Map<string, { color: string; wins: number; leads: number }>();
+    for (const s of seats) {
+      if (!s.partyShortName) continue;
+      const existing = partySet.get(s.partyShortName) || { color: s.partyColor, wins: 0, leads: 0 };
+      if (s.status === "won") existing.wins++;
+      else if (s.status === "leading" || s.status === "counting") existing.leads++;
+      partySet.set(s.partyShortName, existing);
+    }
+    for (const [party, d] of partySet) {
+      if (party.toLowerCase().includes(q)) {
+        results.push({
+          type: "party",
+          title: party,
+          subtitle: `${d.wins} won · ${d.leads} leading`,
+          href: `/analytics?view=party&name=${encodeURIComponent(party)}`,
+          color: d.color,
+        });
+      }
+    }
+
+    // Search constituencies
+    for (const s of seats) {
+      if (s.constituency?.toLowerCase().includes(q) || s.constituencySlug?.toLowerCase().includes(q)) {
+        results.push({
+          type: "constituency",
+          title: s.constituency,
+          subtitle: `${s.districtName} · ${s.provinceName}`,
+          href: `/analytics?view=constituency&id=${s.constituencySlug}`,
+          meta: s.status === "won" ? `${s.leaderName} (${s.partyShortName})` : s.status,
+        });
+      }
+    }
+
+    // Search districts
+    const districtSet = new Set<string>();
+    for (const s of seats) {
+      if (s.districtName?.toLowerCase().includes(q) && !districtSet.has(s.districtName)) {
+        districtSet.add(s.districtName);
+        results.push({
+          type: "district",
+          title: s.districtName,
+          subtitle: s.provinceName,
+          href: `/analytics?view=province&id=${s.provinceId}`,
+        });
+      }
+    }
+
+    // Search provinces
+    for (const [id, name] of Object.entries(PROV_NAMES)) {
+      if (name.toLowerCase().includes(q)) {
+        results.push({
+          type: "province",
+          title: name,
+          subtitle: `Province ${id}`,
+          href: `/analytics?view=province&id=${id}`,
+        });
+      }
+    }
+
+    // Limit results and prioritize
+    const sorted = results.slice(0, 20);
+
+    return NextResponse.json({ success: true, results: sorted });
+  } catch (err) {
+    console.error("[search] Error:", (err as Error).message);
+    return NextResponse.json({ success: true, results: [] });
+  }
+}

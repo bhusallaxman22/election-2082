@@ -115,10 +115,10 @@ interface ElectionData {
 }
 
 const PARTY_META: Record<string, { name: string; shortName: string; color: string }> = {
-  rsp: { name: "Rastriya Swatantra Party", shortName: "RSP", color: "#ea4335" },
-  nc: { name: "Nepali Congress", shortName: "NC", color: "#2563eb" },
-  "cpn-uml": { name: "CPN-UML", shortName: "CPN-UML", color: "#ef4444" },
-  ncp: { name: "Nepali Communist Party", shortName: "NCP", color: "#f97316" },
+  rsp: { name: "Rastriya Swatantra Party", shortName: "RSP", color: "#1a73e8" },
+  nc: { name: "Nepali Congress", shortName: "NC", color: "#16a34a" },
+  "cpn-uml": { name: "CPN-UML", shortName: "CPN-UML", color: "#dc2626" },
+  ncp: { name: "Nepali Communist Party", shortName: "NCP", color: "#e84118" },
   rpp: { name: "Rastriya Prajatantra Party", shortName: "RPP", color: "#f59e0b" },
   ssp: { name: "Shram Sanskriti Party", shortName: "SSP", color: "#8b5cf6" },
   jsp: { name: "Janata Samajwadi Party-Nepal", shortName: "JSP", color: "#10b981" },
@@ -209,7 +209,7 @@ function mapParty(api: APIPartyResult): Party {
     shortName,
     slug: api.party_slug,
     nameNp: api.party_name,
-    color: api.party_color ?? meta?.color ?? fallbackColor(id),
+    color: meta?.color ?? api.party_color ?? fallbackColor(id),
     logo: sanitizeImageUrl(api.party_image) || `/assets/images/parties/${slug}.svg`,
     wins: toNumber(api.winner_count),
     leads: toNumber(api.leading_count),

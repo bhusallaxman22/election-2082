@@ -310,7 +310,7 @@ export default function ProvinceDetailPage() {
                 {topCounting.map((seat) => (
                   <Link
                     key={`${seat.districtId}-${seat.constNumber}`}
-                    href={`/results?constituency=${seat.constituencySlug}`}
+                    href={`/analytics?view=constituency&id=${seat.constituencySlug}`}
                     className="block p-3 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -325,7 +325,7 @@ export default function ProvinceDetailPage() {
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.partyColor }} />
                           <span className="text-xs text-gray-700 truncate flex-1">{c.name}</span>
                           <Link
-                            href={`/parties/${c.partyShortName.toLowerCase()}`}
+                            href={`/analytics?view=party&name=${encodeURIComponent(c.partyShortName)}`}
                             className="text-[10px] font-medium px-1.5 py-0.5 rounded hover:opacity-80"
                             style={{ backgroundColor: `${c.partyColor}15`, color: c.partyColor }}
                             onClick={(e) => e.stopPropagation()}
@@ -359,7 +359,7 @@ export default function ProvinceDetailPage() {
                 {neckAndNeck.map((seat) => (
                   <Link
                     key={`${seat.districtId}-${seat.constNumber}`}
-                    href={`/results?constituency=${seat.constituencySlug}`}
+                    href={`/analytics?view=constituency&id=${seat.constituencySlug}`}
                     className="block p-3 rounded-xl border border-red-100 hover:border-red-200 hover:shadow-sm transition-all bg-red-50/30"
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -374,7 +374,7 @@ export default function ProvinceDetailPage() {
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.partyColor }} />
                           <span className="text-xs text-gray-700 truncate flex-1">{c.name}</span>
                           <Link
-                            href={`/parties/${c.partyShortName.toLowerCase()}`}
+                            href={`/analytics?view=party&name=${encodeURIComponent(c.partyShortName)}`}
                             className="text-[10px] font-medium px-1.5 py-0.5 rounded hover:opacity-80"
                             style={{ backgroundColor: `${c.partyColor}15`, color: c.partyColor }}
                             onClick={(e) => e.stopPropagation()}
@@ -426,7 +426,7 @@ export default function ProvinceDetailPage() {
             {wonSeats.map((seat) => (
               <Link
                 key={`${seat.districtId}-${seat.constNumber}`}
-                href={`/results?constituency=${seat.constituencySlug}`}
+                href={`/analytics?view=constituency&id=${seat.constituencySlug}`}
                 className="card p-3 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-2">
@@ -467,7 +467,7 @@ export default function ProvinceDetailPage() {
                   return (
                     <Link
                       key={i}
-                      href={`/parties/${partySlug}`}
+                      href={`/analytics?view=party&name=${encodeURIComponent(r.partyShortName)}`}
                       className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors"
                     >
                       <div

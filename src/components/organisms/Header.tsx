@@ -4,14 +4,15 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { SearchOutlined } from "@ant-design/icons";
 import { useElectionData } from "@/context/ElectionDataContext";
 
 const navItems = [
   { href: "/", label: "Overview" },
   { href: "/results", label: "Results" },
-  { href: "/candidates", label: "Candidates" },
   { href: "/parties", label: "Parties" },
   { href: "/provinces", label: "Provinces" },
+  { href: "/analytics", label: "Analytics" },
 ];
 
 export default function Header() {
@@ -46,6 +47,7 @@ export default function Header() {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
           <nav className="scrollbar-hide flex items-center gap-1 overflow-x-auto rounded-2xl border border-white/65 bg-white/65 p-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href;
@@ -64,6 +66,16 @@ export default function Header() {
               );
             })}
           </nav>
+          <button
+            onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+            className="flex items-center gap-1.5 rounded-xl border border-white/65 bg-white/65 px-3 py-2 text-xs text-slate-400 transition-all hover:bg-white hover:text-slate-600"
+            aria-label="Search"
+          >
+            <SearchOutlined className="text-[13px]" />
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="hidden rounded-[5px] border border-slate-200 bg-slate-50 px-1 py-0.5 text-[9px] font-semibold text-slate-400 sm:inline">⌘K</kbd>
+          </button>
+          </div>
         </div>
       </div>
     </header>

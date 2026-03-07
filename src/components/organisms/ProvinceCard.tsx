@@ -16,7 +16,7 @@ export default function ProvinceCard({ province, liveResults }: ProvinceCardProp
   const pct = province.totalSeats > 0 ? ((totalLeads / province.totalSeats) * 100).toFixed(0) : "0";
 
   return (
-    <Link href={`/provinces/${province.id}`} className="block group">
+    <Link href={`/analytics?view=province&id=${province.id}`} className="block group">
       <div className="glass-card h-full transition-all duration-200 group-hover:border-slate-300/50">
         <div className="h-1" style={{ background: `linear-gradient(90deg, ${province.color}88, ${province.color})` }} />
 

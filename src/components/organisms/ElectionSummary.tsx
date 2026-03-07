@@ -72,7 +72,7 @@ export default function ElectionSummary() {
                 const percentage = province.totalSeats > 0 ? (filled / province.totalSeats) * 100 : 0;
 
                 return (
-                  <Link key={province.id} href={`/provinces/${province.id}`} className="rounded-2xl border border-slate-100/80 bg-white/90 p-3 text-center transition-colors hover:bg-white">
+                  <Link key={province.id} href={`/analytics?view=province&id=${province.id}`} className="rounded-2xl border border-slate-100/80 bg-white/90 p-3 text-center transition-colors hover:bg-white">
                     <div className="text-[11px] font-bold text-slate-700">{province.name}</div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
                       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${percentage}%`, backgroundColor: province.color }} />
@@ -92,7 +92,7 @@ export default function ElectionSummary() {
               {topParties.map((party) => (
                 <Link
                   key={party.id}
-                  href={`/parties/${party.shortName.toLowerCase().replace(/[\s()]/g, "-")}`}
+                  href={`/analytics?view=party&name=${encodeURIComponent(party.shortName)}`}
                   className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 transition-colors hover:bg-white/10"
                 >
                   <div className="flex min-w-0 items-center gap-3">

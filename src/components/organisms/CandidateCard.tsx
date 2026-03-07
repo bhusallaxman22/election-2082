@@ -54,7 +54,7 @@ export default function CandidateCard({ result }: CandidateCardProps) {
           {result.totalVotes.toLocaleString()} votes
         </span>
         <Link
-          href={`/results?constituency=${result.constituencySlug}`}
+          href={`/analytics?view=constituency&id=${result.constituencySlug}`}
           className="text-xs font-bold text-red-600 transition-colors group-hover:underline hover:text-red-700"
         >
           Details →
