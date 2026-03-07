@@ -31,9 +31,9 @@ interface DistrictInfo {
 }
 
 const ALL_DISTRICTS: DistrictInfo[] = [
-  // Province 1 - Koshi (28 seats)
+  // Province 1 - Koshi (28 seats) — from EC constituencies.json 2082
   { districtId: 1, name: "Taplejung", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
-  { districtId: 2, name: "Panchthar", provinceId: 1, provinceName: "Koshi", constituencies: 2 },
+  { districtId: 2, name: "Panchthar", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
   { districtId: 3, name: "Ilam", provinceId: 1, provinceName: "Koshi", constituencies: 2 },
   { districtId: 4, name: "Jhapa", provinceId: 1, provinceName: "Koshi", constituencies: 5 },
   { districtId: 5, name: "Sankhuwasabha", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
@@ -41,20 +41,20 @@ const ALL_DISTRICTS: DistrictInfo[] = [
   { districtId: 7, name: "Bhojpur", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
   { districtId: 8, name: "Dhankuta", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
   { districtId: 9, name: "Morang", provinceId: 1, provinceName: "Koshi", constituencies: 6 },
-  { districtId: 10, name: "Sunsari", provinceId: 1, provinceName: "Koshi", constituencies: 3 },
+  { districtId: 10, name: "Sunsari", provinceId: 1, provinceName: "Koshi", constituencies: 4 },
   { districtId: 11, name: "Solukhumbu", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
   { districtId: 12, name: "Khotang", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
   { districtId: 13, name: "Okhaldhunga", provinceId: 1, provinceName: "Koshi", constituencies: 1 },
   { districtId: 14, name: "Udayapur", provinceId: 1, provinceName: "Koshi", constituencies: 2 },
   // Province 2 - Madhesh (32 seats)
-  { districtId: 15, name: "Saptari", provinceId: 2, provinceName: "Madhesh", constituencies: 3 },
+  { districtId: 15, name: "Saptari", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
   { districtId: 16, name: "Siraha", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
   { districtId: 20, name: "Dhanusha", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
   { districtId: 21, name: "Mahottari", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
   { districtId: 22, name: "Sarlahi", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
   { districtId: 32, name: "Rautahat", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
   { districtId: 33, name: "Bara", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
-  { districtId: 34, name: "Parsa", provinceId: 2, provinceName: "Madhesh", constituencies: 5 },
+  { districtId: 34, name: "Parsa", provinceId: 2, provinceName: "Madhesh", constituencies: 4 },
   // Province 3 - Bagmati (33 seats)
   { districtId: 17, name: "Dolakha", provinceId: 3, provinceName: "Bagmati", constituencies: 1 },
   { districtId: 18, name: "Ramechhap", provinceId: 3, provinceName: "Bagmati", constituencies: 1 },
@@ -82,12 +82,12 @@ const ALL_DISTRICTS: DistrictInfo[] = [
   { districtId: 50, name: "Baglung", provinceId: 4, provinceName: "Gandaki", constituencies: 2 },
   { districtId: 51, name: "Parbat", provinceId: 4, provinceName: "Gandaki", constituencies: 1 },
   // Province 5 - Lumbini (26 seats)
-  { districtId: 77, name: "Nawalparasi West", provinceId: 5, provinceName: "Lumbini", constituencies: 2 },
-  { districtId: 46, name: "Rupandehi", provinceId: 5, provinceName: "Lumbini", constituencies: 6 },
-  { districtId: 47, name: "Kapilvastu", provinceId: 5, provinceName: "Lumbini", constituencies: 4 },
-  { districtId: 43, name: "Palpa", provinceId: 5, provinceName: "Lumbini", constituencies: 1 },
+  { districtId: 42, name: "Gulmi", provinceId: 5, provinceName: "Lumbini", constituencies: 2 },
+  { districtId: 43, name: "Palpa", provinceId: 5, provinceName: "Lumbini", constituencies: 2 },
   { districtId: 44, name: "Arghakhanchi", provinceId: 5, provinceName: "Lumbini", constituencies: 1 },
-  { districtId: 42, name: "Gulmi", provinceId: 5, provinceName: "Lumbini", constituencies: 1 },
+  { districtId: 46, name: "Rupandehi", provinceId: 5, provinceName: "Lumbini", constituencies: 5 },
+  { districtId: 47, name: "Kapilvastu", provinceId: 5, provinceName: "Lumbini", constituencies: 3 },
+  { districtId: 77, name: "Nawalparasi West", provinceId: 5, provinceName: "Lumbini", constituencies: 2 },
   { districtId: 54, name: "Pyuthan", provinceId: 5, provinceName: "Lumbini", constituencies: 1 },
   { districtId: 53, name: "Rolpa", provinceId: 5, provinceName: "Lumbini", constituencies: 1 },
   { districtId: 52, name: "Rukum East", provinceId: 5, provinceName: "Lumbini", constituencies: 1 },
@@ -108,13 +108,13 @@ const ALL_DISTRICTS: DistrictInfo[] = [
   // Province 7 - Sudurpaschim (16 seats)
   { districtId: 67, name: "Bajura", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 1 },
   { districtId: 68, name: "Achham", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 2 },
-  { districtId: 69, name: "Bajhang", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 2 },
+  { districtId: 69, name: "Bajhang", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 1 },
   { districtId: 70, name: "Doti", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 1 },
-  { districtId: 71, name: "Kailali", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 4 },
+  { districtId: 71, name: "Kailali", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 5 },
   { districtId: 72, name: "Darchula", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 1 },
-  { districtId: 73, name: "Baitadi", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 2 },
+  { districtId: 73, name: "Baitadi", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 1 },
   { districtId: 74, name: "Dadeldhura", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 1 },
-  { districtId: 75, name: "Kanchanpur", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 2 },
+  { districtId: 75, name: "Kanchanpur", provinceId: 7, provinceName: "Sudurpaschim", constituencies: 3 },
 ];
 
 const POPULAR_CONSTITUENCIES = [
@@ -865,7 +865,7 @@ let intervalHandle: ReturnType<typeof setInterval> | null = null;
 
 export function startSyncLoop() {
   if (intervalHandle) return;
-  const interval = Number(process.env.SYNC_INTERVAL) || 60_000;
+  const interval = Number(process.env.SYNC_INTERVAL) || 120_000;
 
   console.log(`[sync] Starting sync loop (every ${interval / 1000}s)`);
 

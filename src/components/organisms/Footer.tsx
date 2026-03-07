@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import VisitorCounter from "../atoms/VisitorCounter";
 
 export default function Footer() {
   return (
@@ -79,14 +80,17 @@ export default function Footer() {
               result.election.gov.np
             </a>
           </span>
-          <a
-            href="https://bhusallaxman.com.np"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-slate-400 transition-colors hover:text-white"
-          >
-            developed by Laxman Bhusal bhusallaxman.com.np
-          </a>
+          <div className="flex items-center gap-4">
+            <VisitorCounter />
+            <a
+              href="https://bhusallaxman.com.np"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-slate-400 transition-colors hover:text-white"
+            >
+              developed by Laxman Bhusal bhusallaxman.com.np
+            </a>
+          </div>
         </div>
       </div>
     </footer>

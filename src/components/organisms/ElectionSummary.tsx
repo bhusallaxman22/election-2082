@@ -92,7 +92,7 @@ export default function ElectionSummary() {
               {topParties.map((party) => (
                 <Link
                   key={party.id}
-                  href={`/results?party=${party.shortName.toLowerCase()}`}
+                  href={`/parties/${party.shortName.toLowerCase().replace(/[\s()]/g, "-")}`}
                   className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 transition-colors hover:bg-white/10"
                 >
                   <div className="flex min-w-0 items-center gap-3">

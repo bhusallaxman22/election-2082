@@ -373,7 +373,7 @@ function ResultsContent() {
                       <th className="text-center py-3.5 px-5 text-sm text-gray-500 font-medium">Seats</th>
                       {["RSP", "CPN-UML", "NC", "NCP", "Others"].map((p) => (
                         <th key={p} className="text-center py-3.5 px-5 text-sm text-gray-500 font-medium">
-                          <Link href={`/results?party=${p.toLowerCase()}`} className="hover:text-gray-900 transition-colors">
+                          <Link href={`/parties/${p.toLowerCase().replace(/[\s()]/g, "-")}`} className="hover:text-gray-900 transition-colors">
                             {p}
                           </Link>
                         </th>
@@ -398,7 +398,7 @@ function ResultsContent() {
                             <td key={partyName} className="text-center py-3.5 px-5 text-sm">
                               {val > 0 ? (
                                 <Link
-                                  href={`/results?party=${partyName.toLowerCase()}`}
+                                  href={`/parties/${partyName.toLowerCase().replace(/[\s()]/g, "-")}`}
                                   className="font-medium text-gray-800 hover:text-red-600 transition-colors"
                                 >
                                   {val}

@@ -35,7 +35,23 @@ interface PlaceholderSeat {
   status: "pending";
 }
 
+interface PRSeat {
+  pr: true;
+  partyShortName: string;
+  partyColor: string;
+  partySlug: string;
+  index: number; // seat index within party
+}
+
 type SeatSlot = SeatData | PlaceholderSeat;
+
+interface PRPartyData {
+  shortName: string;
+  color: string;
+  seats: number;
+  votes: number;
+  votePercent: number;
+}
 
 interface SeatMapProps {
   onSeatClick?: (seat: SeatData) => void;
@@ -51,6 +67,12 @@ interface SeatPoint {
   y: number;
 }
 
+interface PRSeatPoint {
+  seat: PRSeat;
+  x: number;
+  y: number;
+}
+
 const SEATING_TEMPLATE = [39, 35, 31, 27, 22, 11];
 const CHAMBER_WIDTH = 1000;
 const CHAMBER_HEIGHT = 620;
@@ -58,6 +80,9 @@ const CHAMBER_CENTER_X = 500;
 const CHAMBER_CENTER_Y = 546;
 const CHAMBER_OUTER_RADIUS = 462;
 const CHAMBER_INNER_RADIUS = 208;
+const PR_RING_GAP = 22;
+const PR_RING_RADIUS = CHAMBER_OUTER_RADIUS + PR_RING_GAP + 14;
+const TOTAL_PR_SEATS = 110;
 const PARTY_COLOR_MAP: Record<string, string> = {
   RSP: "#2563eb",
   NC: "#16a34a",
@@ -161,7 +186,9 @@ export default function SeatMap({
 }: SeatMapProps) {
   const router = useRouter();
   const [seats, setSeats] = useState<SeatData[]>([]);
+  const [prParties, setPRParties] = useState<PRPartyData[]>([]);
   const [hoveredSeat, setHoveredSeat] = useState<SeatData | null>(null);
+  const [hoveredPR, setHoveredPR] = useState<PRSeat | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -177,7 +204,36 @@ export default function SeatMap({
       }
     };
 
+    const fetchPR = async () => {
+      try {
+        const res = await fetch("/api/pr-results", { cache: "no-store" });
+        const json = await res.json();
+        if (json.parties) {
+          setPRParties(
+            json.parties
+              .filter((p: { seats: number }) => p.seats > 0)
+              .map((p: { shortName: string; color: string; seats: number; votes: number; votePercent: number }) => ({
+                shortName: p.shortName,
+                color: p.color,
+                seats: p.seats,
+                votes: p.votes,
+                votePercent: p.votePercent,
+              }))
+          );
+        }
+      } catch {
+        // silent
+      }
+    };
+
     fetchSeats();
+    fetchPR();
+
+    // Poll every 2 minutes for fresh data
+    const pollInterval = setInterval(() => {
+      fetchSeats();
+      fetchPR();
+    }, 120_000);
 
     let eventSource: EventSource | null = null;
     try {
@@ -187,6 +243,7 @@ export default function SeatMap({
           const payload = JSON.parse(event.data);
           if (payload.type === "sync_complete" && payload.constituenciesChanged > 0) {
             fetchSeats();
+            fetchPR();
           }
         } catch {
           // ignore parse errors
@@ -197,6 +254,7 @@ export default function SeatMap({
     }
 
     return () => {
+      clearInterval(pollInterval);
       if (eventSource) eventSource.close();
     };
   }, []);
@@ -245,28 +303,73 @@ export default function SeatMap({
 
   const rowCounts = useMemo(() => getRowCounts(displaySlots.length), [displaySlots.length]);
 
-  const wonCount = displaySlots.filter((slot) => isSeatData(slot) && slot.status === "won").length;
-  const leadingCount = displaySlots.filter((slot) => isSeatData(slot) && slot.status === "leading").length;
-  const pendingCount = displaySlots.filter((slot) => ("placeholder" in slot ? true : slot.status === "pending")).length;
+  // Generate PR seat slots from party allocations
+  const prSeatSlots = useMemo((): PRSeat[] => {
+    const slots: PRSeat[] = [];
+    for (const party of prParties) {
+      for (let i = 0; i < party.seats; i++) {
+        slots.push({
+          pr: true,
+          partyShortName: party.shortName,
+          partyColor: party.color,
+          partySlug: party.shortName.toLowerCase().replace(/[\s()]/g, "-"),
+          index: i,
+        });
+      }
+    }
+    return slots;
+  }, [prParties]);
+
+  const fptpWon = displaySlots.filter((slot) => isSeatData(slot) && slot.status === "won").length;
+  const fptpLeading = displaySlots.filter((slot) => isSeatData(slot) && slot.status === "leading").length;
+  const fptpPending = displaySlots.filter((slot) => ("placeholder" in slot ? true : slot.status === "pending")).length;
+  const prAllocated = prSeatSlots.length;
+  const wonCount = fptpWon + prAllocated;
+  const leadingCount = fptpLeading;
+  const pendingCount = fptpPending + (TOTAL_PR_SEATS - prAllocated);
 
   const partyLegend = useMemo(() => {
-    const map = new Map<string, { party: string; color: string; total: number }>();
+    const map = new Map<string, { party: string; color: string; total: number; fptp: number; pr: number }>();
+
+    // Count FPTP seats
     for (const slot of displaySlots) {
       if (!isSeatData(slot)) continue;
       if (!slot.partyShortName || slot.status === "pending") continue;
       const current = map.get(slot.partyShortName);
       if (current) {
         current.total += 1;
+        current.fptp += 1;
       } else {
         map.set(slot.partyShortName, {
           party: slot.partyShortName,
           color: resolvePartyColor(slot.partyShortName, slot.partyColor),
           total: 1,
+          fptp: 1,
+          pr: 0,
         });
       }
     }
+
+    // Add PR seats
+    for (const party of prParties) {
+      if (party.seats <= 0) continue;
+      const current = map.get(party.shortName);
+      if (current) {
+        current.total += party.seats;
+        current.pr += party.seats;
+      } else {
+        map.set(party.shortName, {
+          party: party.shortName,
+          color: resolvePartyColor(party.shortName, party.color),
+          total: party.seats,
+          fptp: 0,
+          pr: party.seats,
+        });
+      }
+    }
+
     return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 10);
-  }, [displaySlots]);
+  }, [displaySlots, prParties]);
 
   const seatPoints = useMemo(() => {
     const points: SeatPoint[] = [];
@@ -298,6 +401,44 @@ export default function SeatMap({
     return points;
   }, [displaySlots, rowCounts]);
 
+  // PR seats laid out on an outer arc ring
+  const prSeatPoints = useMemo((): PRSeatPoint[] => {
+    const total: number = TOTAL_PR_SEATS;
+    if (total <= 0) return [];
+
+    const angleStart = Math.PI * 0.98;
+    const angleEnd = Math.PI * 0.02;
+    const points: PRSeatPoint[] = [];
+
+    // Lay out all 110 PR positions; fill allocated ones with party color, rest grey
+    let slotIndex = 0;
+    for (let i = 0; i < total; i++) {
+      const t = total === 1 ? 0.5 : i / (total - 1);
+      const angle = angleStart + (angleEnd - angleStart) * t;
+      const x = CHAMBER_CENTER_X + PR_RING_RADIUS * Math.cos(angle);
+      const y = CHAMBER_CENTER_Y - PR_RING_RADIUS * Math.sin(angle);
+
+      if (slotIndex < prSeatSlots.length) {
+        points.push({ seat: prSeatSlots[slotIndex], x, y });
+        slotIndex++;
+      } else {
+        // Unallocated PR seat placeholder
+        points.push({
+          seat: {
+            pr: true,
+            partyShortName: "",
+            partyColor: "#d1d5db",
+            partySlug: "",
+            index: i,
+          },
+          x, y,
+        });
+      }
+    }
+
+    return points;
+  }, [prSeatSlots]);
+
   const guideRadii = useMemo(() => {
     if (rowCounts.length === 0) return [];
     const maxRadius = CHAMBER_OUTER_RADIUS;
@@ -309,6 +450,7 @@ export default function SeatMap({
   }, [rowCounts]);
 
   const seatSize = compact ? 16 : seatPoints.length > 120 ? 18 : 20;
+  const prDotSize = 5.5;
 
   const onSeatSelect = (slot: SeatSlot) => {
     if (!isSeatData(slot)) return;
@@ -318,6 +460,15 @@ export default function SeatMap({
     }
     router.push(`/results?constituency=${slot.constituencySlug}`);
   };
+
+  const onPRSeatClick = (seat: PRSeat) => {
+    if (seat.partySlug) {
+      router.push(`/parties/${seat.partySlug}`);
+    }
+  };
+
+  // Expanded viewBox to fit PR outer ring
+  const svgViewBox = `-10 ${CHAMBER_CENTER_Y - PR_RING_RADIUS - 20} ${CHAMBER_WIDTH + 20} ${PR_RING_RADIUS + 100}`;
 
   return (
     <div className={compact ? "" : "glass-card p-4 sm:p-5"}>
@@ -330,7 +481,7 @@ export default function SeatMap({
             </div>
             <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-600">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1">
-                <span className="h-3 w-3 rounded-full bg-emerald-500" /> Won ({wonCount})
+                <span className="h-3 w-3 rounded-full bg-emerald-500" /> Won/Allocated ({wonCount})
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1">
                 <span className="h-3 w-3 rounded-full bg-amber-400" /> Leading ({leadingCount})
@@ -350,6 +501,9 @@ export default function SeatMap({
                 >
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: party.color }} />
                   {party.party} ({party.total})
+                  {party.fptp > 0 && party.pr > 0 && (
+                    <span className="text-[9px] font-medium text-slate-400">{party.fptp}F+{party.pr}PR</span>
+                  )}
                 </span>
               ))}
             </div>
@@ -368,11 +522,49 @@ export default function SeatMap({
             </div>
           ) : (
             <svg
-              viewBox={`0 0 ${CHAMBER_WIDTH} ${CHAMBER_HEIGHT}`}
+              viewBox={svgViewBox}
               className="absolute inset-0 h-full w-full"
               role="img"
               aria-label="Parliament seat arrangement"
             >
+              {/* PR outer ring guide arc */}
+              <path
+                d={arcPath(PR_RING_RADIUS)}
+                fill="none"
+                stroke={withAlpha("#94a3b8", 0.25)}
+                strokeWidth={1}
+                strokeLinecap="round"
+                strokeDasharray="3 4"
+                className="pointer-events-none"
+              />
+
+              {/* PR label */}
+              <text
+                x={CHAMBER_CENTER_X}
+                y={CHAMBER_CENTER_Y - PR_RING_RADIUS - 8}
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="700"
+                fill="#94a3b8"
+                className="pointer-events-none"
+              >
+                PR ({prAllocated}/{TOTAL_PR_SEATS})
+              </text>
+
+              {/* FPTP label */}
+              <text
+                x={CHAMBER_CENTER_X}
+                y={CHAMBER_CENTER_Y - CHAMBER_OUTER_RADIUS - 6}
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="700"
+                fill="#94a3b8"
+                className="pointer-events-none"
+              >
+                FPTP ({fptpWon + fptpLeading}/{displaySlots.length})
+              </text>
+
+              {/* FPTP guide arcs */}
               <g className="pointer-events-none" aria-hidden="true">
                 {guideRadii.map((radius) => (
                   <path
@@ -517,6 +709,44 @@ export default function SeatMap({
                 stroke={withAlpha("#64748b", 0.45)}
                 strokeWidth={1}
               />
+
+              {/* PR seats - outer ring dots */}
+              {prSeatPoints.map(({ seat, x, y }, idx) => {
+                const allocated = seat.partyShortName !== "";
+                const color = allocated
+                  ? resolvePartyColor(seat.partyShortName, seat.partyColor)
+                  : "#d1d5db";
+                const label = allocated
+                  ? `PR — ${seat.partyShortName}`
+                  : "PR (Unallocated)";
+
+                return (
+                  <circle
+                    key={`pr-${idx}`}
+                    cx={x}
+                    cy={y}
+                    r={prDotSize}
+                    fill={allocated ? color : "#e2e8f0"}
+                    stroke={allocated ? color : "#94a3b8"}
+                    strokeWidth={0.8}
+                    className={allocated ? "cursor-pointer" : ""}
+                    style={allocated ? { filter: `drop-shadow(0 0 2px ${withAlpha(color, 0.4)})` } : undefined}
+                    onClick={() => allocated && onPRSeatClick(seat)}
+                    onMouseEnter={(event) => {
+                      if (!allocated) return;
+                      setHoveredPR(seat);
+                      setTooltipPos({ x: event.clientX, y: event.clientY });
+                    }}
+                    onMouseMove={(event) => {
+                      if (!allocated) return;
+                      setTooltipPos({ x: event.clientX, y: event.clientY });
+                    }}
+                    onMouseLeave={() => setHoveredPR(null)}
+                  >
+                    <title>{label}</title>
+                  </circle>
+                );
+              })}
             </svg>
           )}
         </div>
@@ -529,7 +759,7 @@ export default function SeatMap({
         >
           <div className="max-w-[230px] rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
             <div className="text-xs font-bold text-slate-900">{hoveredSeat.constituency}</div>
-            <div className="mt-0.5 text-[10px] text-slate-500">{hoveredSeat.provinceName}</div>
+            <div className="mt-0.5 text-[10px] text-slate-500">{hoveredSeat.provinceName} · FPTP</div>
 
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center justify-between gap-3">
@@ -558,6 +788,21 @@ export default function SeatMap({
                 {hoveredSeat.status === "won" && " · Declared"}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {hoveredPR && (
+        <div
+          className="pointer-events-none fixed z-50 animate-fade-in"
+          style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 10 }}
+        >
+          <div className="max-w-[200px] rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: resolvePartyColor(hoveredPR.partyShortName, hoveredPR.partyColor) }} />
+              <span className="text-xs font-bold text-slate-900">{hoveredPR.partyShortName}</span>
+            </div>
+            <div className="mt-1 text-[10px] text-slate-500">Proportional Representation seat</div>
           </div>
         </div>
       )}

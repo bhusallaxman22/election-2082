@@ -1,178 +1,38 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { provinces } from "@/data/provinces";
-import type { ProvinceData } from "@/data/provinces";
 import type { LiveCandidate } from "@/context/ElectionDataContext";
 
-interface ZoneConfig {
-  id: string;
-  name: string;
-  nameNp: string;
-  color: string;
-  hoverColor: string;
-  provinceId: number;
-  districts: { name: string; districtId: number; constituencies: number }[];
-  totalConstituencies: number;
-}
-
-// 14 administrative zones with district IDs and constituency counts
-const ZONES: ZoneConfig[] = [
-  { id: "NPME", name: "Mechi", nameNp: "मेची", color: "#e5b6ac", hoverColor: "#d49385", provinceId: 1,
-    districts: [
-      { name: "Taplejung", districtId: 1, constituencies: 1 },
-      { name: "Panchthar", districtId: 2, constituencies: 2 },
-      { name: "Ilam", districtId: 3, constituencies: 2 },
-      { name: "Jhapa", districtId: 4, constituencies: 5 },
-    ],
-    totalConstituencies: 10 },
-  { id: "NPKO", name: "Koshi", nameNp: "कोशी", color: "#dca899", hoverColor: "#c88a78", provinceId: 1,
-    districts: [
-      { name: "Morang", districtId: 9, constituencies: 5 },
-      { name: "Sunsari", districtId: 10, constituencies: 3 },
-      { name: "Dhankuta", districtId: 8, constituencies: 1 },
-      { name: "Terhathum", districtId: 6, constituencies: 1 },
-      { name: "Sankhuwasabha", districtId: 5, constituencies: 1 },
-    ],
-    totalConstituencies: 11 },
-  { id: "NPSA", name: "Sagarmatha", nameNp: "सगरमाथा", color: "#d79e8e", hoverColor: "#c4806c", provinceId: 1,
-    districts: [
-      { name: "Bhojpur", districtId: 7, constituencies: 1 },
-      { name: "Solukhumbu", districtId: 11, constituencies: 1 },
-      { name: "Okhaldhunga", districtId: 13, constituencies: 1 },
-      { name: "Khotang", districtId: 12, constituencies: 1 },
-      { name: "Udayapur", districtId: 14, constituencies: 2 },
-    ],
-    totalConstituencies: 6 },
-  { id: "NPJA", name: "Janakpur", nameNp: "जनकपुर", color: "#95cbdd", hoverColor: "#6db5d1", provinceId: 2,
-    districts: [
-      { name: "Saptari", districtId: 15, constituencies: 3 },
-      { name: "Siraha", districtId: 16, constituencies: 3 },
-      { name: "Dhanusha", districtId: 20, constituencies: 4 },
-      { name: "Mahottari", districtId: 21, constituencies: 3 },
-      { name: "Sarlahi", districtId: 22, constituencies: 4 },
-      { name: "Rautahat", districtId: 32, constituencies: 3 },
-      { name: "Bara", districtId: 33, constituencies: 3 },
-      { name: "Parsa", districtId: 34, constituencies: 3 },
-    ],
-    totalConstituencies: 26 },
-  { id: "NPBA", name: "Bagmati", nameNp: "बागमती", color: "#b2d8a6", hoverColor: "#8ec97e", provinceId: 3,
-    districts: [
-      { name: "Dolakha", districtId: 17, constituencies: 1 },
-      { name: "Sindhupalchok", districtId: 30, constituencies: 2 },
-      { name: "Rasuwa", districtId: 23, constituencies: 1 },
-      { name: "Dhading", districtId: 24, constituencies: 2 },
-      { name: "Nuwakot", districtId: 25, constituencies: 2 },
-      { name: "Kathmandu", districtId: 26, constituencies: 10 },
-      { name: "Bhaktapur", districtId: 27, constituencies: 2 },
-      { name: "Lalitpur", districtId: 28, constituencies: 3 },
-      { name: "Kavrepalanchok", districtId: 29, constituencies: 3 },
-    ],
-    totalConstituencies: 26 },
-  { id: "NPNA", name: "Narayani", nameNp: "नारायणी", color: "#a2cf94", hoverColor: "#7fbd6d", provinceId: 3,
-    districts: [
-      { name: "Ramechhap", districtId: 18, constituencies: 1 },
-      { name: "Sindhuli", districtId: 19, constituencies: 2 },
-      { name: "Makwanpur", districtId: 31, constituencies: 2 },
-      { name: "Chitwan", districtId: 35, constituencies: 3 },
-    ],
-    totalConstituencies: 8 },
-  { id: "NPGA", name: "Gandaki", nameNp: "गण्डकी", color: "#f2a55a", hoverColor: "#e78d2f", provinceId: 4,
-    districts: [
-      { name: "Gorkha", districtId: 36, constituencies: 2 },
-      { name: "Lamjung", districtId: 38, constituencies: 1 },
-      { name: "Tanahun", districtId: 40, constituencies: 2 },
-      { name: "Syangja", districtId: 41, constituencies: 2 },
-      { name: "Kaski", districtId: 39, constituencies: 3 },
-      { name: "Manang", districtId: 37, constituencies: 1 },
-      { name: "Mustang", districtId: 48, constituencies: 1 },
-    ],
-    totalConstituencies: 12 },
-  { id: "NPDH", name: "Dhaulagiri", nameNp: "धौलागिरी", color: "#eda043", hoverColor: "#d98520", provinceId: 4,
-    districts: [
-      { name: "Myagdi", districtId: 49, constituencies: 1 },
-      { name: "Parbat", districtId: 51, constituencies: 1 },
-      { name: "Baglung", districtId: 50, constituencies: 2 },
-      { name: "Nawalparasi East", districtId: 45, constituencies: 2 },
-    ],
-    totalConstituencies: 6 },
-  { id: "NPLU", name: "Lumbini", nameNp: "लुम्बिनी", color: "#f4c2f1", hoverColor: "#ea9ce6", provinceId: 5,
-    districts: [
-      { name: "Nawalparasi West", districtId: 77, constituencies: 1 },
-      { name: "Rupandehi", districtId: 46, constituencies: 4 },
-      { name: "Kapilvastu", districtId: 47, constituencies: 3 },
-      { name: "Palpa", districtId: 43, constituencies: 1 },
-      { name: "Arghakhanchi", districtId: 44, constituencies: 1 },
-      { name: "Gulmi", districtId: 42, constituencies: 1 },
-    ],
-    totalConstituencies: 11 },
-  { id: "NPRA", name: "Rapti", nameNp: "राप्ती", color: "#eeb0eb", hoverColor: "#e38fdf", provinceId: 5,
-    districts: [
-      { name: "Pyuthan", districtId: 54, constituencies: 1 },
-      { name: "Rolpa", districtId: 53, constituencies: 1 },
-      { name: "Rukum East", districtId: 52, constituencies: 1 },
-      { name: "Dang", districtId: 56, constituencies: 3 },
-      { name: "Banke", districtId: 65, constituencies: 3 },
-      { name: "Bardiya", districtId: 66, constituencies: 2 },
-    ],
-    totalConstituencies: 11 },
-  { id: "NPKA", name: "Karnali", nameNp: "कर्णाली", color: "#ffe380", hoverColor: "#ffda4d", provinceId: 6,
-    districts: [
-      { name: "Dolpa", districtId: 57, constituencies: 1 },
-      { name: "Mugu", districtId: 58, constituencies: 1 },
-      { name: "Humla", districtId: 61, constituencies: 1 },
-      { name: "Jumla", districtId: 59, constituencies: 1 },
-      { name: "Kalikot", districtId: 60, constituencies: 1 },
-    ],
-    totalConstituencies: 5 },
-  { id: "NPBH", name: "Bheri", nameNp: "भेरी", color: "#ffd966", hoverColor: "#ffcc33", provinceId: 6,
-    districts: [
-      { name: "Dailekh", districtId: 63, constituencies: 2 },
-      { name: "Surkhet", districtId: 64, constituencies: 2 },
-      { name: "Jajarkot", districtId: 62, constituencies: 1 },
-      { name: "Rukum West", districtId: 78, constituencies: 1 },
-      { name: "Salyan", districtId: 55, constituencies: 1 },
-    ],
-    totalConstituencies: 7 },
-  { id: "NPSE", name: "Seti", nameNp: "सेती", color: "#bcc0e7", hoverColor: "#9da2d8", provinceId: 7,
-    districts: [
-      { name: "Doti", districtId: 70, constituencies: 1 },
-      { name: "Achham", districtId: 68, constituencies: 2 },
-      { name: "Kailali", districtId: 71, constituencies: 4 },
-      { name: "Kanchanpur", districtId: 75, constituencies: 2 },
-    ],
-    totalConstituencies: 9 },
-  { id: "NPMA", name: "Mahakali", nameNp: "महाकाली", color: "#adb2de", hoverColor: "#8d94d0", provinceId: 7,
-    districts: [
-      { name: "Bajura", districtId: 67, constituencies: 1 },
-      { name: "Bajhang", districtId: 69, constituencies: 1 },
-      { name: "Darchula", districtId: 72, constituencies: 1 },
-      { name: "Baitadi", districtId: 73, constituencies: 2 },
-      { name: "Dadeldhura", districtId: 74, constituencies: 1 },
-    ],
-    totalConstituencies: 6 },
-];
-
-// Zone label positions
-const ZONE_LABELS: Record<string, { x: number; y: number }> = {
-  NPME: { x: 905, y: 380 },
-  NPKO: { x: 830, y: 460 },
-  NPSA: { x: 815, y: 360 },
-  NPJA: { x: 701, y: 460 },
-  NPBA: { x: 640, y: 350 },
-  NPNA: { x: 580, y: 430 },
-  NPGA: { x: 500, y: 280 },
-  NPDH: { x: 430, y: 310 },
-  NPLU: { x: 390, y: 400 },
-  NPRA: { x: 320, y: 340 },
-  NPKA: { x: 240, y: 180 },
-  NPBH: { x: 295, y: 260 },
-  NPSE: { x: 160, y: 210 },
-  NPMA: { x: 100, y: 140 },
+// Province color palette (fill + darker hover)
+const PROVINCE_COLORS: Record<number, { fill: string; hover: string }> = {
+  1: { fill: "#e5b6ac", hover: "#d49385" },
+  2: { fill: "#95cbdd", hover: "#6db5d1" },
+  3: { fill: "#b2d8a6", hover: "#8ec97e" },
+  4: { fill: "#f2a55a", hover: "#e78d2f" },
+  5: { fill: "#f4c2f1", hover: "#ea9ce6" },
+  6: { fill: "#ffe380", hover: "#ffda4d" },
+  7: { fill: "#bcc0e7", hover: "#9da2d8" },
 };
 
-// ─── Constituency result panel types ─────────────────────────────────
+// SVG IDs 77 & 78 duplicate 45 & 52 (pre-split GeoJSON); skip rendering them
+const SPLIT_SVG_IDS = new Set([77, 78]);
+// When clicking the unsplit polygon, show both East/West halves
+const SPLIT_DISTRICTS: Record<number, number[]> = {
+  45: [45, 77], // Nawalparasi East + West
+  52: [52, 78], // Rukum East + West
+};
+
+interface DistrictInfo {
+  districtId: number;
+  name: string;
+  constituencies: number;
+  provinceId: number;
+  provinceName: string;
+  slug: string;
+}
+
 interface ConstituencyDetail {
   constituency: string;
   districtId: number;
@@ -184,12 +44,31 @@ interface ConstituencyDetail {
 
 export default function NepalMap() {
   const router = useRouter();
-  const [hoveredZone, setHoveredZone] = useState<string | null>(null);
-  const [selectedZone, setSelectedZone] = useState<string | null>(null);
-  const [zonePaths, setZonePaths] = useState<Record<string, string>>({});
+
+  // Flat district lookup built once from provinces data
+  const districtMap = useMemo(() => {
+    const map: Record<number, DistrictInfo> = {};
+    for (const prov of provinces) {
+      for (const d of prov.districts) {
+        map[d.districtId] = {
+          districtId: d.districtId,
+          name: d.name,
+          constituencies: d.constituencies,
+          provinceId: prov.id,
+          provinceName: prov.name,
+          slug: d.slug,
+        };
+      }
+    }
+    return map;
+  }, []);
+
+  const [hoveredDistrict, setHoveredDistrict] = useState<number | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<number | null>(null);
+  const [districtPaths, setDistrictPaths] = useState<Record<number, string>>({});
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  // Constituency drill-down state
+  // Constituency drill-down
   const [selectedConstituency, setSelectedConstituency] = useState<{
     districtId: number;
     constNum: number;
@@ -198,27 +77,30 @@ export default function NepalMap() {
   const [constDetail, setConstDetail] = useState<ConstituencyDetail | null>(null);
   const [constLoading, setConstLoading] = useState(false);
 
+  // Load district SVG paths
   useEffect(() => {
-    fetch("/assets/images/np.svg")
+    fetch("/assets/images/np-districts.svg")
       .then((res) => res.text())
       .then((text) => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, "image/svg+xml");
-        const paths: Record<string, string> = {};
+        const paths: Record<number, string> = {};
         doc.querySelectorAll("path[id]").forEach((el) => {
           const id = el.getAttribute("id");
           const d = el.getAttribute("d");
-          if (id && d) paths[id] = d;
+          if (id && d) {
+            const numId = parseInt(id.replace("d", ""), 10);
+            if (!isNaN(numId)) paths[numId] = d;
+          }
         });
-        setZonePaths(paths);
+        setDistrictPaths(paths);
       })
       .catch(() => {});
   }, []);
 
-  // Fetch constituency details when a seat is clicked
+  // Fetch constituency detail when a seat is clicked
   useEffect(() => {
     if (!selectedConstituency) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setConstDetail(null);
       return;
     }
@@ -245,10 +127,10 @@ export default function NepalMap() {
     return () => { cancelled = true; };
   }, [selectedConstituency]);
 
-  const handleZoneClick = useCallback((zone: ZoneConfig) => {
+  const handleDistrictClick = useCallback((districtId: number) => {
     setSelectedConstituency(null);
     setConstDetail(null);
-    setSelectedZone((prev) => (prev === zone.id ? null : zone.id));
+    setSelectedDistrict((prev) => (prev === districtId ? null : districtId));
   }, []);
 
   const handleConstClick = useCallback(
@@ -262,25 +144,40 @@ export default function NepalMap() {
     []
   );
 
-  const hasLoaded = Object.keys(zonePaths).length > 0;
-  const activeZone = ZONES.find((z) => z.id === selectedZone);
-  const hoveredZoneData = ZONES.find((z) => z.id === hoveredZone);
+  const hasLoaded = Object.keys(districtPaths).length > 0;
 
-  const getProvinceForZone = (zone: ZoneConfig): ProvinceData | undefined => {
-    return provinces.find((p) => p.id === zone.provinceId);
-  };
+  // Districts shown in the detail panel (handles split districts)
+  const activeDistricts = useMemo(() => {
+    if (!selectedDistrict) return [];
+    const ids = SPLIT_DISTRICTS[selectedDistrict] || [selectedDistrict];
+    return ids.map((id) => districtMap[id]).filter(Boolean);
+  }, [selectedDistrict, districtMap]);
+
+  const activeProvince = useMemo(() => {
+    if (!activeDistricts.length) return null;
+    return provinces.find((p) => p.id === activeDistricts[0].provinceId) || null;
+  }, [activeDistricts]);
+
+  const hoveredInfo = hoveredDistrict ? districtMap[hoveredDistrict] : null;
+
+  // IDs to render (skip duplicate split polygons d77/d78)
+  const renderableIds = useMemo(() => {
+    return Object.keys(districtPaths)
+      .map(Number)
+      .filter((id) => !SPLIT_SVG_IDS.has(id));
+  }, [districtPaths]);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-bold text-gray-900">Election Zone Map</h3>
-          <p className="text-[11px] text-gray-400 mt-0.5">Click on any zone, then click a seat to view results</p>
+          <h3 className="text-sm font-bold text-gray-900">Election District Map</h3>
+          <p className="text-[11px] text-gray-400 mt-0.5">Click on any district to view constituency results</p>
         </div>
-        {(selectedZone || selectedConstituency) && (
+        {(selectedDistrict || selectedConstituency) && (
           <button
             onClick={() => {
-              setSelectedZone(null);
+              setSelectedDistrict(null);
               setSelectedConstituency(null);
               setConstDetail(null);
             }}
@@ -308,50 +205,45 @@ export default function NepalMap() {
                 setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
               }}
             >
-              {ZONES.map((zone) => {
-                const d = zonePaths[zone.id];
-                if (!d) return null;
-                const isHovered = hoveredZone === zone.id;
-                const isSelected = selectedZone === zone.id;
-                const isRelated = selectedZone ? ZONES.find((z) => z.id === selectedZone)?.provinceId === zone.provinceId : false;
-                const label = ZONE_LABELS[zone.id];
+              {renderableIds.map((dId) => {
+                const pathD = districtPaths[dId];
+                const info = districtMap[dId];
+                if (!pathD || !info) return null;
+
+                const colors = PROVINCE_COLORS[info.provinceId];
+                if (!colors) return null;
+
+                const isHovered = hoveredDistrict === dId;
+                const isSelected = selectedDistrict === dId;
+                const isSameProvince = selectedDistrict
+                  ? districtMap[selectedDistrict]?.provinceId === info.provinceId
+                  : false;
 
                 return (
-                  <g key={zone.id}>
-                    <path
-                      d={d}
-                      fill={isSelected ? zone.hoverColor : isHovered ? zone.hoverColor : isRelated ? `${zone.color}dd` : zone.color}
-                      stroke={isSelected ? "#374151" : "#fff"}
-                      strokeWidth={isSelected ? "2.5" : "1.5"}
-                      strokeLinejoin="round"
-                      className="cursor-pointer transition-colors duration-150"
-                      onMouseEnter={() => setHoveredZone(zone.id)}
-                      onMouseLeave={() => setHoveredZone(null)}
-                      onClick={() => handleZoneClick(zone)}
-                    />
-                    {label && (
-                      <text
-                        x={label.x}
-                        y={label.y}
-                        textAnchor="middle"
-                        className="pointer-events-none select-none"
-                        style={{
-                          fontSize: zone.name.length > 8 ? "7px" : "8.5px",
-                          fontWeight: isSelected ? 800 : 600,
-                          fill: isSelected ? "#111827" : "#374151",
-                        }}
-                      >
-                        {zone.name}
-                      </text>
-                    )}
-                  </g>
+                  <path
+                    key={dId}
+                    d={pathD}
+                    fill={
+                      isSelected ? colors.hover
+                        : isHovered ? colors.hover
+                          : isSameProvince ? `${colors.fill}dd`
+                            : colors.fill
+                    }
+                    stroke={isSelected ? "#374151" : "#fff"}
+                    strokeWidth={isSelected ? "1.8" : "0.5"}
+                    strokeLinejoin="round"
+                    className="cursor-pointer transition-colors duration-150"
+                    onMouseEnter={() => setHoveredDistrict(dId)}
+                    onMouseLeave={() => setHoveredDistrict(null)}
+                    onClick={() => handleDistrictClick(dId)}
+                  />
                 );
               })}
             </svg>
           )}
 
           {/* Hover tooltip */}
-          {hoveredZoneData && !selectedZone && (
+          {hoveredInfo && !selectedDistrict && (
             <div
               className="absolute z-10 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 shadow-md text-xs animate-fade-in pointer-events-none"
               style={{
@@ -360,52 +252,65 @@ export default function NepalMap() {
               }}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: hoveredZoneData.color }} />
-                <span className="font-semibold text-gray-900">{hoveredZoneData.name}</span>
-                <span className="text-gray-400">{hoveredZoneData.nameNp}</span>
+                <span
+                  className="w-3 h-3 rounded-sm"
+                  style={{ backgroundColor: PROVINCE_COLORS[hoveredInfo.provinceId]?.fill }}
+                />
+                <span className="font-semibold text-gray-900">{hoveredInfo.name}</span>
               </div>
               <div className="text-gray-500">
-                {hoveredZoneData.districts.length} districts · {hoveredZoneData.totalConstituencies} constituencies
+                {hoveredInfo.provinceName} · {hoveredInfo.constituencies} {hoveredInfo.constituencies === 1 ? "constituency" : "constituencies"}
               </div>
             </div>
           )}
         </div>
 
         {/* Detail panel */}
-        {activeZone && (
+        {activeDistricts.length > 0 && (
           <div className="lg:w-80 shrink-0 animate-fade-in">
             <div className="rounded-lg border border-gray-200 bg-white max-h-[70vh] overflow-y-auto">
-              {/* Zone header */}
+              {/* District header */}
               <div className="p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: activeZone.hoverColor }}>
-                    {activeZone.id.replace("NP", "")}
+                  <span
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                    style={{ backgroundColor: PROVINCE_COLORS[activeDistricts[0].provinceId]?.hover }}
+                  >
+                    {activeDistricts[0].districtId}
                   </span>
                   <div>
-                    <div className="text-sm font-bold text-gray-900">{activeZone.name} Zone</div>
-                    <div className="text-[11px] text-gray-400">{activeZone.nameNp}</div>
+                    <div className="text-sm font-bold text-gray-900">
+                      {activeDistricts.length === 1
+                        ? activeDistricts[0].name
+                        : activeDistricts.map((d) => d.name).join(" / ")}
+                    </div>
+                    <div className="text-[11px] text-gray-400">
+                      {activeDistricts[0].provinceName}
+                      {activeDistricts.length > 1 &&
+                        activeDistricts[1].provinceName !== activeDistricts[0].provinceName &&
+                        ` / ${activeDistricts[1].provinceName}`}
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-3">
+                <div className="grid grid-cols-2 gap-2 mt-3">
                   <div className="text-center rounded-md bg-gray-50 py-1.5">
-                    <div className="text-sm font-bold text-gray-900">{activeZone.districts.length}</div>
-                    <div className="text-[9px] text-gray-400">Districts</div>
-                  </div>
-                  <div className="text-center rounded-md bg-gray-50 py-1.5">
-                    <div className="text-sm font-bold text-gray-900">{activeZone.totalConstituencies}</div>
+                    <div className="text-sm font-bold text-gray-900">
+                      {activeDistricts.reduce((s, d) => s + d.constituencies, 0)}
+                    </div>
                     <div className="text-[9px] text-gray-400">Seats</div>
                   </div>
                   <div className="text-center rounded-md bg-gray-50 py-1.5">
-                    <div className="text-sm font-bold text-gray-900">P{activeZone.provinceId}</div>
+                    <div className="text-sm font-bold text-gray-900">
+                      P{[...new Set(activeDistricts.map((d) => d.provinceId))].join("/")}
+                    </div>
                     <div className="text-[9px] text-gray-400">Province</div>
                   </div>
                 </div>
               </div>
 
               {/* Province info */}
-              {(() => {
-                const prov = getProvinceForZone(activeZone);
-                if (!prov) return null;
+              {activeProvince && (() => {
+                const prov = activeProvince;
                 const totalLeads = prov.partyResults.reduce((s, r) => s + r.leads + r.wins, 0);
                 return (
                   <div className="p-4 border-b border-gray-100">
@@ -444,13 +349,13 @@ export default function NepalMap() {
                 );
               })()}
 
-              {/* Districts & clickable seats */}
+              {/* Clickable constituency seats */}
               <div className="p-4">
                 <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-3">
                   Click a seat to view results
                 </div>
                 <div className="space-y-3">
-                  {activeZone.districts.map((d) => (
+                  {activeDistricts.map((d) => (
                     <div key={d.districtId}>
                       <div className="text-xs font-semibold text-gray-700 mb-1.5">{d.name}</div>
                       <div className="flex flex-wrap gap-1.5">
@@ -561,7 +466,7 @@ export default function NepalMap() {
                 )}
 
                 <button
-                  onClick={() => router.push(`/provinces/${activeZone.provinceId}`)}
+                  onClick={() => router.push(`/provinces/${activeDistricts[0].provinceId}`)}
                   className="mt-4 w-full text-center text-xs text-red-600 hover:text-red-700 font-medium py-2 rounded-md border border-gray-200 hover:border-gray-300 transition-colors"
                 >
                   View Province Details →
@@ -572,25 +477,16 @@ export default function NepalMap() {
         )}
       </div>
 
-      {/* Zone legend */}
+      {/* Province legend */}
       <div className="mt-4 flex flex-wrap gap-2">
-        {ZONES.map((z) => (
-          <button
-            key={z.id}
-            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
-              selectedZone === z.id
-                ? "border-gray-900 bg-gray-900 text-white"
-                : hoveredZone === z.id
-                ? "border-gray-400 bg-gray-50 text-gray-700"
-                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-            }`}
-            onClick={() => handleZoneClick(z)}
-            onMouseEnter={() => setHoveredZone(z.id)}
-            onMouseLeave={() => setHoveredZone(null)}
+        {provinces.map((p) => (
+          <div
+            key={p.id}
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-600"
           >
-            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: z.color }} />
-            {z.name}
-          </button>
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: p.color }} />
+            {p.name}
+          </div>
         ))}
       </div>
     </div>

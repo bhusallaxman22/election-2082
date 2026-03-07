@@ -16,6 +16,11 @@ const COMMON_HEADERS: Record<string, string> = {
   "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
   "sec-ch-ua-mobile": "?0",
   "sec-ch-ua-platform": '"macOS"',
+  "sec-fetch-dest": "empty",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-site": "same-origin",
+  "Accept-Language": "en-US,en;q=0.9",
+  Priority: "u=1, i",
 };
 
 let cachedSession: { cookie: string; csrf: string; ts: number } | null = null;
@@ -211,6 +216,12 @@ export interface ECPartyResult {
   SymbolID: number;
 }
 
+export interface ECPRPartyResult {
+  SymbolID: number;
+  PoliticalPartyName: string;
+  TotalVoteReceived: number;
+}
+
 export async function fetchECStates(): Promise<ECState[]> {
   return fetchECJson("JSONFiles/Election2082/Local/Lookup/states.json");
 }
@@ -224,7 +235,101 @@ export async function fetchECConstituencyCounts(): Promise<ECConstituencyCount[]
 }
 
 export async function fetchECPartyResults(): Promise<ECPartyResult[]> {
-  return fetchECJson("HoRPartyTop5.json");
+  return fetchECJson("JSONFiles/Election2082/Common/HoRPartyTop5.txt");
+}
+
+// PR endpoint requires session from /PRVoteChartResult2082.aspx and matching Referer
+let cachedPRSession: { cookie: string; csrf: string; ts: number } | null = null;
+
+async function getPRSession(): Promise<{ cookie: string; csrf: string }> {
+  if (cachedPRSession && Date.now() - cachedPRSession.ts < SESSION_TTL) {
+    return cachedPRSession;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const res = await fetch(EC_BASE + "/PRVoteChartResult2082.aspx", {
+      headers: { "User-Agent": BROWSER_UA },
+      redirect: "follow",
+      signal: controller.signal,
+    });
+
+    const setCookies = res.headers.getSetCookie?.() ?? [];
+    let sessionId = "";
+    let csrf = "";
+
+    for (const sc of setCookies) {
+      if (sc.startsWith("ASP.NET_SessionId=")) sessionId = sc.split(";")[0].split("=")[1];
+      if (sc.startsWith("CsrfToken=")) csrf = sc.split(";")[0].split("=")[1];
+    }
+
+    if (!sessionId || !csrf) {
+      const allCookies: string[] = [];
+      res.headers.forEach((value, key) => {
+        if (key.toLowerCase() === "set-cookie") allCookies.push(value);
+      });
+      for (const sc of allCookies) {
+        for (const part of sc.split(",")) {
+          const trimmed = part.trim();
+          if (trimmed.startsWith("ASP.NET_SessionId=")) sessionId = trimmed.split(";")[0].split("=")[1];
+          if (trimmed.startsWith("CsrfToken=")) csrf = trimmed.split(";")[0].split("=")[1];
+        }
+      }
+    }
+
+    if (!csrf) throw new Error("Failed to obtain PR CSRF token");
+
+    const cookie = `ASP.NET_SessionId=${sessionId}; CsrfToken=${csrf}`;
+    cachedPRSession = { cookie, csrf, ts: Date.now() };
+    return cachedPRSession;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function fetchECPRPartyResults(): Promise<ECPRPartyResult[]> {
+  const handlerUrl = `${EC_BASE}/Handlers/SecureJson.ashx?file=JSONFiles/Election2082/Common/PRHoRPartyTop5.txt`;
+  const MAX_RETRIES = 3;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const session = await getPRSession();
+      const res = await fetch(handlerUrl, {
+        headers: {
+          ...COMMON_HEADERS,
+          "X-Csrf-Token": session.csrf,
+          Cookie: session.cookie,
+          Referer: `${EC_BASE}/PRVoteChartResult2082.aspx`,
+        },
+      });
+
+      if (res.status === 429) {
+        const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+        console.warn(`[ec-api] 429 for PR, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
+      if (res.status === 403 && cachedPRSession) {
+        cachedPRSession = null;
+        continue;
+      }
+
+      if (!res.ok) throw new Error(`EC PR API ${res.status}`);
+
+      const text = await res.text();
+      return JSON.parse(text.replace(/^\uFEFF/, ""));
+    } catch (err) {
+      if (attempt === MAX_RETRIES) throw err;
+      const delay = 2000 * Math.pow(2, attempt);
+      console.warn(`[ec-api] PR error, retrying in ${delay}ms:`, (err as Error).message);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+
+  throw new Error(`EC PR API failed after ${MAX_RETRIES} retries`);
 }
 
 export async function fetchECConstituencyResults(

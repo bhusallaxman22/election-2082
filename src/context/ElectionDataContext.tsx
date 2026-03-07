@@ -10,7 +10,7 @@ import { candidateImageMap } from "@/data/imageMap";
 const ELECTION_API_URL = "/api/election";
 const CANDIDATES_API_URL = "/api/candidates";
 const RESULTS_API_URL = "/api/results";
-const POLL_INTERVAL = 60_000;
+const POLL_INTERVAL = 120_000;
 
 interface APIPartyResult {
   party_id: number | string;
