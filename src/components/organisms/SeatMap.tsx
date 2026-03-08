@@ -75,7 +75,6 @@ interface PRSeatPoint {
 
 const SEATING_TEMPLATE = [39, 35, 31, 27, 22, 11];
 const CHAMBER_WIDTH = 1000;
-const CHAMBER_HEIGHT = 620;
 const CHAMBER_CENTER_X = 500;
 const CHAMBER_CENTER_Y = 546;
 const CHAMBER_OUTER_RADIUS = 462;
@@ -219,6 +218,7 @@ export default function SeatMap({
                 votes: p.votes,
                 votePercent: p.votePercent,
               }))
+              .sort((a: PRPartyData, b: PRPartyData) => b.seats - a.seats)
           );
         }
       } catch {
@@ -301,7 +301,49 @@ export default function SeatMap({
     [allSeatSlots, filterProvince, filterParty, filterStatus]
   );
 
-  const rowCounts = useMemo(() => getRowCounts(displaySlots.length), [displaySlots.length]);
+  // Group FPTP chamber seats by party so blocks are visually clustered.
+  const orderedSlots = useMemo(() => {
+    const partyBuckets = new Map<string, SeatData[]>();
+    const nonPartySlots: SeatSlot[] = [];
+    const statusOrder: Record<SeatData["status"], number> = {
+      won: 0,
+      leading: 1,
+      counting: 2,
+      pending: 3,
+    };
+
+    for (const slot of displaySlots) {
+      if (!isSeatData(slot) || !slot.partyShortName || slot.status === "pending") {
+        nonPartySlots.push(slot);
+        continue;
+      }
+      const key = normalizePartyKey(slot.partyShortName) || slot.partyShortName;
+      if (!partyBuckets.has(key)) partyBuckets.set(key, []);
+      partyBuckets.get(key)!.push(slot);
+    }
+
+    const partyClustered = Array.from(partyBuckets.entries())
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+      .flatMap(([, seatsByParty]) =>
+        seatsByParty.sort((a, b) => {
+          const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+          if (statusDiff !== 0) return statusDiff;
+          if (a.provinceId !== b.provinceId) return a.provinceId - b.provinceId;
+          if (a.districtId !== b.districtId) return a.districtId - b.districtId;
+          return a.constNumber - b.constNumber;
+        })
+      );
+
+    const sortedNonParty = nonPartySlots.sort((a, b) => {
+      if (a.provinceId !== b.provinceId) return a.provinceId - b.provinceId;
+      if (a.districtId !== b.districtId) return a.districtId - b.districtId;
+      return a.constNumber - b.constNumber;
+    });
+
+    return [...partyClustered, ...sortedNonParty];
+  }, [displaySlots]);
+
+  const rowCounts = useMemo(() => getRowCounts(orderedSlots.length), [orderedSlots.length]);
 
   // Generate PR seat slots from party allocations
   const prSeatSlots = useMemo((): PRSeat[] => {
@@ -381,25 +423,36 @@ export default function SeatMap({
     const angleStart = Math.PI * 0.98;
     const angleEnd = Math.PI * 0.02;
 
-    let pointer = 0;
+    const layoutCoords: { x: number; y: number; angle: number; radius: number }[] = [];
+
     rowCounts.forEach((count, rowIndex) => {
       const radius = maxRadius - rowIndex * radiusStep;
       for (let i = 0; i < count; i += 1) {
-        const slot = displaySlots[pointer];
-        if (!slot) break;
         const t = count === 1 ? 0.5 : i / (count - 1);
         const angle = angleStart + (angleEnd - angleStart) * t;
-        points.push({
-          slot,
+        layoutCoords.push({
           x: CHAMBER_CENTER_X + radius * Math.cos(angle),
           y: CHAMBER_CENTER_Y - radius * Math.sin(angle),
+          angle,
+          radius,
         });
-        pointer += 1;
       }
     });
 
+    layoutCoords
+      .sort((a, b) => b.angle - a.angle || b.radius - a.radius)
+      .forEach((coord, index) => {
+        const slot = orderedSlots[index];
+        if (!slot) return;
+        points.push({
+          slot,
+          x: coord.x,
+          y: coord.y,
+        });
+      });
+
     return points;
-  }, [displaySlots, rowCounts]);
+  }, [orderedSlots, rowCounts]);
 
   // PR seats laid out on an outer arc ring
   const prSeatPoints = useMemo((): PRSeatPoint[] => {
