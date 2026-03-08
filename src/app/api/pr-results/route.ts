@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { cacheGet, cacheSet } from "@/lib/redis";
 import { fetchECPRPartyResults, getPartyMeta } from "@/lib/ec-api";
+import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 const TOTAL_PR_SEATS = 110;
 const CACHE_KEY = "pr_party_results";
 const CACHE_TTL = 120; // 2 minutes
+
+function sainteLagueDivisor(currentSeats: number): number {
+  if (currentSeats <= 0) return 1.4;
+  return currentSeats * 2 + 1; // 3,5,7...
+}
 
 export async function GET() {
   try {
@@ -22,14 +28,25 @@ export async function GET() {
     const raw = await fetchECPRPartyResults();
     const totalVotes = raw.reduce((sum, p) => sum + p.TotalVoteReceived, 0);
 
-    const parties = raw
+    // Gather FPTP wins per party (for National Party Status reference)
+    const fptpWinRows = await query<{ leader_party: string; status: string }>(
+      "SELECT leader_party, status FROM constituency_results WHERE status = 'won'"
+    );
+    const fptpWins = new Map<string, number>();
+    for (const row of fptpWinRows) {
+      const key = (row.leader_party || "").trim().toUpperCase();
+      if (!key) continue;
+      fptpWins.set(key, (fptpWins.get(key) || 0) + 1);
+    }
+
+    const thresholdVotes = totalVotes * 0.03;
+
+    const partiesBase = raw
       .filter((p) => p.TotalVoteReceived > 0)
-      .sort((a, b) => b.TotalVoteReceived - a.TotalVoteReceived)
       .map((p) => {
         const meta = getPartyMeta(p.SymbolID, p.PoliticalPartyName);
         const votePercent = totalVotes > 0 ? (p.TotalVoteReceived / totalVotes) * 100 : 0;
-        // PR seats allocated proportionally (simplified D'Hondt-like)
-        const seats = totalVotes > 0 ? Math.round((p.TotalVoteReceived / totalVotes) * TOTAL_PR_SEATS) : 0;
+        const wins = fptpWins.get(meta.shortName.trim().toUpperCase()) || 0;
         return {
           symbolId: p.SymbolID,
           partyName: meta.name,
@@ -38,11 +55,60 @@ export async function GET() {
           color: meta.color,
           votes: p.TotalVoteReceived,
           votePercent: Math.round(votePercent * 100) / 100,
-          seats,
+          fptpWins: wins,
+          aboveThreshold: p.TotalVoteReceived >= thresholdVotes,
+          seats: 0,
         };
       });
 
-    const result = { totalVotes, totalSeats: TOTAL_PR_SEATS, parties };
+    // Mathematical model per requested method: 3% cutoff + Modified Sainte-Lague sequence.
+    const eligible = partiesBase.filter((p) => p.aboveThreshold);
+
+    for (let i = 0; i < TOTAL_PR_SEATS; i += 1) {
+      if (eligible.length === 0) break;
+
+      let winnerIndex = 0;
+      let bestQuotient = -1;
+
+      for (let j = 0; j < eligible.length; j += 1) {
+        const party = eligible[j];
+        const quotient = party.votes / sainteLagueDivisor(party.seats);
+        if (
+          quotient > bestQuotient ||
+          (quotient === bestQuotient && party.votes > eligible[winnerIndex].votes) ||
+          (quotient === bestQuotient && party.votes === eligible[winnerIndex].votes && party.symbolId < eligible[winnerIndex].symbolId)
+        ) {
+          bestQuotient = quotient;
+          winnerIndex = j;
+        }
+      }
+
+      eligible[winnerIndex].seats += 1;
+    }
+
+    const parties = partiesBase
+      .sort((a, b) => b.seats - a.seats || b.votes - a.votes)
+      .map((p) => ({
+        symbolId: p.symbolId,
+        partyName: p.partyName,
+        shortName: p.shortName,
+        nameNp: p.nameNp,
+        color: p.color,
+        votes: p.votes,
+        votePercent: p.votePercent,
+        seats: p.seats,
+        fptpWins: p.fptpWins,
+        aboveThreshold: p.aboveThreshold,
+      }));
+
+    const result = {
+      totalVotes,
+      totalSeats: TOTAL_PR_SEATS,
+      thresholdPercent: 3,
+      thresholdVotes: Math.round(thresholdVotes),
+      method: "modified-sainte-lague",
+      parties,
+    };
     await cacheSet(CACHE_KEY, result, CACHE_TTL);
 
     return NextResponse.json(result, {

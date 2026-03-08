@@ -18,6 +18,9 @@ interface PRParty {
 interface PRData {
   totalVotes: number;
   totalSeats: number;
+  thresholdPercent?: number;
+  thresholdVotes?: number;
+  method?: string;
   parties: PRParty[];
 }
 
@@ -147,6 +150,40 @@ export default function ProportionalResults() {
   return (
     <div className="card p-6">
       <h2 className="text-base font-bold text-gray-900 mb-5">Federal Proportional Results</h2>
+
+      <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900">
+        <p className="font-bold">Notice</p>
+        <p className="mt-1 leading-relaxed">
+          This dashboard provides a mathematical representation only. Actual seat allocation is contingent upon a party's
+          National Party Status (requiring a 3% PR threshold and at least 1 FPTP seat), attainment of minimum valid votes,
+          and strict adherence to inclusion criteria (including 33% female representation and ethnic cluster quotas).
+        </p>
+      </div>
+
+      <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-700">
+        <p className="font-bold text-slate-900">How are these seats calculated?</p>
+        <p className="mt-1 leading-relaxed">
+          Seats are awarded one-by-one using the Modified Sainte-Lague method. It ensures the parliament reflects total vote
+          share while being fair to mid-sized parties.
+        </p>
+        <div className="mt-3 space-y-2 leading-relaxed">
+          <p>
+            <span className="font-semibold text-slate-900">1. The 3% Cut-off:</span> First, any party with less than 3% of
+            total votes is disqualified to prevent too many tiny parties.
+          </p>
+          <p>
+            <span className="font-semibold text-slate-900">2. The "Penalty" Rule:</span> Every time a party wins a seat,
+            it becomes harder to win the next one. We divide by bigger numbers each round: <code>1.4</code>, then <code>3</code>,
+            <code>5</code>, <code>7</code>...
+          </p>
+          <div className="rounded-lg border border-slate-200 bg-white p-3">
+            <p className="font-semibold text-slate-900">Example: Awarding 2 Seats</p>
+            <p className="mt-1"><span className="font-semibold">Round 1:</span> Party A (10k) = 10,000 / 1.4 = 7,142; Party B (8k) = 8,000 / 1.4 = 5,714. Party A wins seat #1.</p>
+            <p className="mt-1"><span className="font-semibold">Round 2:</span> Party A now uses divisor 3 =&gt; 10,000 / 3 = 3,333; Party B remains at 1.4 =&gt; 8,000 / 1.4 = 5,714. Party B wins seat #2.</p>
+          </div>
+        </div>
+      </div>
+
       <Tabs
         defaultActiveKey="2082"
         items={[
