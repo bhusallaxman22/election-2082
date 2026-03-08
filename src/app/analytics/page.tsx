@@ -497,8 +497,12 @@ function PartyDetail({ party, onBack, onConstituency }: {
                   data={constituencyMomentum}
                   cursor="pointer"
                   onClick={(entry) => {
-                    const payload = (entry as { payload?: PartyConstituency }).payload ?? (entry as PartyConstituency);
-                    if (payload?.districtId && payload?.constNumber) onConstituency(payload.districtId, payload.constNumber);
+                    const payload = (
+                      entry as unknown as { payload?: { districtId?: number; constNumber?: number } }
+                    ).payload;
+                    if (payload?.districtId && payload?.constNumber) {
+                      onConstituency(payload.districtId, payload.constNumber);
+                    }
                   }}
                 >
                   {constituencyMomentum.map((seat, idx) => (
@@ -1117,8 +1121,10 @@ function PartyMomentumBubble({ parties, onParty }: { parties: PartyStanding[]; o
             <Scatter
               data={points}
               onClick={(entry) => {
-                const payload = (entry as { payload?: MomentumPoint }).payload;
-                const party = payload?.party ?? (entry as MomentumPoint).party;
+                const payload = (
+                  entry as unknown as { payload?: { party?: string } }
+                ).payload;
+                const party = payload?.party;
                 if (party) onParty(party);
               }}
               cursor="pointer"
