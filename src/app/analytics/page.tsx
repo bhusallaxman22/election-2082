@@ -8,6 +8,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
   AreaChart, Area, CartesianGrid, Legend,
+  ScatterChart, Scatter, ZAxis,
+  RadialBarChart, RadialBar, PolarAngleAxis,
 } from "recharts";
 import { Spin } from "antd";
 import { LeftOutlined, RightOutlined, TrophyOutlined, TeamOutlined, EnvironmentOutlined } from "@ant-design/icons";
@@ -108,6 +110,16 @@ function fmt(n: number): string {
   return n.toLocaleString();
 }
 
+function colorWithAlpha(hex: string, alpha: number): string {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return `rgba(148,163,184,${alpha})`;
+  const int = Number.parseInt(match[1], 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${Math.min(1, Math.max(0, alpha))})`;
+}
+
 const TT = {
   background: "rgba(255,255,255,0.96)", backdropFilter: "blur(12px)",
   border: "1px solid rgba(148,163,184,0.2)", borderRadius: 14, fontSize: 12,
@@ -173,6 +185,18 @@ function ConstituencyPanel({
 }) {
   const top = data.candidates.slice(0, 8);
   const maxV = Math.max(...top.map((c) => c.votes), 1);
+  const shareArc = useMemo(() => {
+    if (!data.totalVotes) return [];
+    return top
+      .slice(0, 5)
+      .map((candidate) => ({
+        ...candidate,
+        share: Math.round((candidate.votes / data.totalVotes) * 1000) / 10,
+      }))
+      .filter((candidate) => candidate.share > 0)
+      .sort((a, b) => b.share - a.share);
+  }, [top, data.totalVotes]);
+  const shareArcMax = Math.max(...shareArc.map((candidate) => candidate.share), 1);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -255,6 +279,46 @@ function ConstituencyPanel({
         </div>
       )}
 
+      {shareArc.length > 0 && (
+        <div className="glass-card p-5">
+          <h4 className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Candidate Power Arc</h4>
+          <p className="mb-3 text-[11px] text-slate-400">Radial intensity of candidate vote share in this constituency.</p>
+          <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
+            <div className="mx-auto w-full" style={{ height: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart data={shareArc} innerRadius="20%" outerRadius="94%" startAngle={90} endAngle={-270}>
+                  <PolarAngleAxis type="number" domain={[0, shareArcMax]} tick={false} />
+                  <Tooltip
+                    contentStyle={TT}
+                    formatter={(value, _name, props) => {
+                      const row = props?.payload as { votes?: number };
+                      return [`${value}% (${fmt(row?.votes ?? 0)} votes)`, "Vote Share"];
+                    }}
+                  />
+                  <RadialBar dataKey="share" background cornerRadius={8}>
+                    {shareArc.map((candidate, idx) => (
+                      <Cell key={`${candidate.id}-${idx}`} fill={candidate.color || "#94a3b8"} />
+                    ))}
+                  </RadialBar>
+                </RadialBarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2">
+              {shareArc.map((candidate) => (
+                <div key={candidate.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: candidate.color || "#94a3b8" }} />
+                    <span className="text-xs font-semibold text-slate-700">{candidate.name}</span>
+                    <span className="text-[10px] text-slate-400">({candidate.party})</span>
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">{candidate.share}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {data.margin > 0 && data.totalVotes > 0 && (
         <div className="glass-card p-5">
           <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Competitiveness</h4>
@@ -292,6 +356,24 @@ function PartyDetail({ party, onBack, onConstituency }: {
       .sort((a, b) => b.total - a.total),
     [party.provinceWise],
   );
+  const constituencyMomentum = useMemo(() => {
+    return party.constituencies
+      .filter((seat) => seat.totalVotes > 0)
+      .map((seat) => {
+        const marginPct = seat.totalVotes > 0 ? (seat.margin / seat.totalVotes) * 100 : 0;
+        const color =
+          seat.status === "won"
+            ? party.color
+            : seat.status === "leading"
+              ? colorWithAlpha(party.color, 0.65)
+              : "#94a3b8";
+        return {
+          ...seat,
+          marginPct: Math.round(marginPct * 100) / 100,
+          color,
+        };
+      });
+  }, [party.constituencies, party.color]);
   const filteredC = useMemo(() => {
     const q = cSearch.toLowerCase();
     let rows = party.constituencies as PartyConstituency[];
@@ -372,6 +454,63 @@ function PartyDetail({ party, onBack, onConstituency }: {
         </div>
       )}
 
+      {constituencyMomentum.length > 0 && (
+        <div className="glass-card p-5">
+          <h4 className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Constituency Momentum Field</h4>
+          <p className="mb-3 text-[11px] text-slate-400">X-axis: victory/lead margin %, Y-axis: total constituency votes, bubble size: candidate votes.</p>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ left: 4, right: 14, top: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                <XAxis
+                  type="number"
+                  dataKey="marginPct"
+                  name="Margin %"
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => `${Number(value).toFixed(1)}%`}
+                />
+                <YAxis
+                  type="number"
+                  dataKey="totalVotes"
+                  name="Total Votes"
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => fmt(Number(value))}
+                />
+                <ZAxis type="number" dataKey="votes" range={[80, 320]} />
+                <Tooltip
+                  contentStyle={TT}
+                  formatter={(value, name, props) => {
+                    const row = props?.payload as { totalVotes?: number; marginPct?: number; status?: string };
+                    if (name === "marginPct") return [`${Number(value).toFixed(2)}%`, "Margin"];
+                    return [`${fmt(Number(value))}`, row?.status === "won" ? "Winner Votes" : "Leader Votes"];
+                  }}
+                  labelFormatter={(_label, payload) => {
+                    const row = payload?.[0]?.payload as { constituency?: string };
+                    return row?.constituency ?? "";
+                  }}
+                />
+                <Scatter
+                  data={constituencyMomentum}
+                  cursor="pointer"
+                  onClick={(entry) => {
+                    const payload = (entry as { payload?: PartyConstituency }).payload ?? (entry as PartyConstituency);
+                    if (payload?.districtId && payload?.constNumber) onConstituency(payload.districtId, payload.constNumber);
+                  }}
+                >
+                  {constituencyMomentum.map((seat, idx) => (
+                    <Cell key={`${seat.districtId}-${seat.constNumber}-${idx}`} fill={seat.color} stroke={seat.color} fillOpacity={0.8} strokeWidth={1.2} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* Tab nav */}
       <div className="flex gap-1 rounded-xl border border-slate-100 bg-slate-50/50 p-1">
         {(["constituencies", "provinces"] as const).map((t) => (
@@ -445,10 +584,6 @@ function ProvinceDrillMap({
   initialSelectedDistrictId?: number | null;
 }) {
   const [selectedDistrictId, setSelectedDistrictId] = useState<number | null>(initialSelectedDistrictId ?? null);
-
-  useEffect(() => {
-    setSelectedDistrictId(initialSelectedDistrictId ?? null);
-  }, [initialSelectedDistrictId, province.provinceId]);
 
   const districtVoteMap = useMemo(() => {
     const map: Record<number, number> = {};
@@ -552,6 +687,44 @@ function ProvinceDetail({ province, onBack, onConstituency, onParty, selectedDis
   }));
   const { sort: pSort, toggle: pToggle } = useTableSort<string>("totalVotes");
   const [pSearch, setPSearch] = useState("");
+  const matrixParties = useMemo(
+    () =>
+      province.parties
+        .map((party) => ({ party: party.party, color: party.color, seats: party.wins + party.leads }))
+        .sort((a, b) => b.seats - a.seats)
+        .slice(0, 6),
+    [province.parties]
+  );
+  const districtRivalry = useMemo(() => {
+    const byDistrict = new Map<number, { districtId: number; district: string; firstConst: number; cells: Record<string, number> }>();
+    for (const seat of province.constituencies) {
+      const current = byDistrict.get(seat.districtId);
+      if (!current) {
+        const initialCells: Record<string, number> = {};
+        if (seat.leaderParty) initialCells[seat.leaderParty] = 1;
+        byDistrict.set(seat.districtId, {
+          districtId: seat.districtId,
+          district: seat.district,
+          firstConst: seat.constNumber,
+          cells: initialCells,
+        });
+      } else {
+        current.firstConst = Math.min(current.firstConst, seat.constNumber);
+        if (seat.leaderParty) current.cells[seat.leaderParty] = (current.cells[seat.leaderParty] ?? 0) + 1;
+      }
+    }
+
+    return Array.from(byDistrict.values())
+      .map((district) => ({
+        ...district,
+        totals: matrixParties.map((party) => ({ ...party, seats: district.cells[party.party] ?? 0 })),
+      }))
+      .sort((a, b) => a.district.localeCompare(b.district));
+  }, [province.constituencies, matrixParties]);
+  const matrixMax = useMemo(
+    () => Math.max(...districtRivalry.flatMap((district) => district.totals.map((cell) => cell.seats)), 1),
+    [districtRivalry]
+  );
   const provFilteredC = useMemo(() => {
     const q = pSearch.toLowerCase();
     let rows = province.constituencies as ConstituencyData[];
@@ -588,6 +761,7 @@ function ProvinceDetail({ province, onBack, onConstituency, onParty, selectedDis
       </div>
 
       <ProvinceDrillMap
+        key={`province-map-${province.provinceId}-${selectedDistrictId ?? "none"}`}
         province={province}
         onConstituency={onConstituency}
         initialSelectedDistrictId={selectedDistrictId}
@@ -607,6 +781,60 @@ function ProvinceDetail({ province, onBack, onConstituency, onParty, selectedDis
                 <Bar dataKey="leads" stackId="a" name="Leading" opacity={0.5} radius={[0, 4, 4, 0]}>{partyChart.map((d, i) => <Cell key={i} fill={d.color} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {districtRivalry.length > 0 && matrixParties.length > 0 && (
+        <div className="glass-card p-5">
+          <h4 className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">District Rivalry Matrix</h4>
+          <p className="mb-3 text-[11px] text-slate-400">Rows are districts, columns are top parties. Stronger color means higher seat grip.</p>
+          <div className="overflow-x-auto">
+            <table className="min-w-[760px] text-left text-xs">
+              <thead>
+                <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <th className="px-2 py-2">District</th>
+                  {matrixParties.map((party) => (
+                    <th key={party.party} className="px-2 py-2 text-center">
+                      <button onClick={() => onParty(party.party)} className="rounded-md px-2 py-1 hover:bg-slate-100">
+                        {party.party}
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {districtRivalry.map((district) => (
+                  <tr key={district.districtId} className="border-t border-slate-100">
+                    <td className="px-2 py-2.5">
+                      <button
+                        onClick={() => onConstituency(district.districtId, district.firstConst)}
+                        className="font-semibold text-slate-700 hover:text-red-600"
+                      >
+                        {district.district}
+                      </button>
+                    </td>
+                    {district.totals.map((cell) => {
+                      const strength = cell.seats / matrixMax;
+                      const bg = cell.seats > 0 ? colorWithAlpha(cell.color, 0.15 + strength * 0.55) : "rgba(148,163,184,0.08)";
+                      const border = cell.seats > 0 ? colorWithAlpha(cell.color, 0.35 + strength * 0.45) : "rgba(148,163,184,0.18)";
+                      return (
+                        <td key={`${district.districtId}-${cell.party}`} className="px-2 py-2 text-center">
+                          <button
+                            onClick={() => (cell.seats > 0 ? onParty(cell.party) : null)}
+                            className="w-14 rounded-lg border px-1 py-1.5 text-xs font-bold text-slate-700"
+                            style={{ backgroundColor: bg, borderColor: border }}
+                            title={`${district.district} · ${cell.party}: ${cell.seats} seats`}
+                          >
+                            {cell.seats > 0 ? cell.seats : "—"}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -809,6 +1037,260 @@ function TurnoutChart({ data, onProvince }: { data: TurnoutItem[]; onProvince: (
   );
 }
 
+interface MomentumPoint {
+  party: string;
+  votes: number;
+  seats: number;
+  voteShare: number;
+  seatShare: number;
+  efficiency: number;
+  color: string;
+}
+
+function PartyMomentumBubble({ parties, onParty }: { parties: PartyStanding[]; onParty: (p: string) => void }) {
+  const points = useMemo<MomentumPoint[]>(() => {
+    const totalVotes = parties.reduce((sum, p) => sum + p.totalVotes, 0);
+    const totalSeats = parties.reduce((sum, p) => sum + p.totalSeats, 0);
+    return parties
+      .filter((p) => p.totalVotes > 0 || p.totalSeats > 0)
+      .map((p) => {
+        const voteShare = totalVotes > 0 ? (p.totalVotes / totalVotes) * 100 : 0;
+        const seatShare = totalSeats > 0 ? (p.totalSeats / totalSeats) * 100 : 0;
+        const efficiency = voteShare > 0 ? seatShare / voteShare : 0;
+        return {
+          party: p.party,
+          votes: p.totalVotes,
+          seats: p.totalSeats,
+          voteShare: Math.round(voteShare * 100) / 100,
+          seatShare: Math.round(seatShare * 100) / 100,
+          efficiency: Math.round(efficiency * 100) / 100,
+          color: p.color,
+        };
+      })
+      .sort((a, b) => b.seats - a.seats)
+      .slice(0, 12);
+  }, [parties]);
+
+  return (
+    <div className="glass-card p-6">
+      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Momentum Bubble Map</h3>
+      <p className="mt-1 text-[11px] text-slate-400">Votes vs seats with bubble size by vote share. Click bubble for party drill-down.</p>
+      <div className="mt-4" style={{ height: 340 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ScatterChart margin={{ left: 4, right: 14, top: 8, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+            <XAxis
+              type="number"
+              dataKey="votes"
+              tick={{ fontSize: 10, fill: "#64748b" }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => fmt(Number(v))}
+              name="Votes"
+            />
+            <YAxis
+              type="number"
+              dataKey="seats"
+              tick={{ fontSize: 10, fill: "#64748b" }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+              name="Seats"
+            />
+            <ZAxis type="number" dataKey="voteShare" range={[110, 420]} name="Vote Share" unit="%" />
+            <Tooltip
+              cursor={{ stroke: "#cbd5e1", strokeDasharray: "4 4" }}
+              content={({ active, payload }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const point = payload[0].payload as MomentumPoint;
+                return (
+                  <div style={TT} className="space-y-1 px-3 py-2">
+                    <p className="text-xs font-bold text-slate-900">{point.party}</p>
+                    <p className="text-[11px] text-slate-600">Votes: {point.votes.toLocaleString()}</p>
+                    <p className="text-[11px] text-slate-600">Seats: {point.seats.toLocaleString()}</p>
+                    <p className="text-[11px] text-slate-600">Vote share: {point.voteShare}%</p>
+                    <p className="text-[11px] text-slate-600">Seat efficiency: {point.efficiency}x</p>
+                  </div>
+                );
+              }}
+            />
+            <Scatter
+              data={points}
+              onClick={(entry) => {
+                const payload = (entry as { payload?: MomentumPoint }).payload;
+                const party = payload?.party ?? (entry as MomentumPoint).party;
+                if (party) onParty(party);
+              }}
+              cursor="pointer"
+            >
+              {points.map((point, idx) => (
+                <Cell key={`${point.party}-${idx}`} fill={point.color} fillOpacity={0.78} stroke={point.color} strokeWidth={1.2} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function CompetitivenessRadial({ provinces }: { provinces: ProvinceBreakdown[] }) {
+  const bands = useMemo(() => {
+    const settled = provinces
+      .flatMap((province) => province.constituencies)
+      .filter((seat) => seat.totalVotes > 0 && seat.margin > 0);
+
+    const defs = [
+      { key: "Knife-edge ≤2%", min: 0, max: 2, fill: "#ef4444" },
+      { key: "Tight 2-5%", min: 2, max: 5, fill: "#f59e0b" },
+      { key: "Clear 5-10%", min: 5, max: 10, fill: "#22c55e" },
+      { key: "Dominant >10%", min: 10, max: Infinity, fill: "#2563eb" },
+    ];
+
+    const values = defs.map((def) => {
+      const count = settled.filter((seat) => {
+        const pct = (seat.margin / Math.max(seat.totalVotes, 1)) * 100;
+        return pct > def.min && pct <= def.max;
+      }).length;
+      const percentage = settled.length > 0 ? (count / settled.length) * 100 : 0;
+      return {
+        label: def.key,
+        count,
+        percentage: Math.round(percentage * 10) / 10,
+        fill: def.fill,
+      };
+    });
+
+    return { values, total: settled.length, max: Math.max(...values.map((v) => v.count), 1) };
+  }, [provinces]);
+
+  return (
+    <div className="glass-card p-6">
+      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Competitiveness Spectrum</h3>
+      <p className="mt-1 text-[11px] text-slate-400">How decisive declared races are, grouped by margin percentage.</p>
+      <div className="mt-2 text-[11px] font-semibold text-slate-500">Declared seats with margin: {bands.total}</div>
+      <div className="mt-3" style={{ height: 230 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart data={bands.values} innerRadius="18%" outerRadius="95%" startAngle={90} endAngle={-270}>
+            <PolarAngleAxis type="number" domain={[0, bands.max]} tick={false} />
+            <Tooltip
+              contentStyle={TT}
+              formatter={(value, _name, props) => {
+                const item = props?.payload as { percentage?: number };
+                return [`${value} seats (${item?.percentage ?? 0}%)`, "Count"];
+              }}
+            />
+            <RadialBar dataKey="count" background cornerRadius={8} />
+          </RadialBarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {bands.values.map((band) => (
+          <div key={band.label} className="rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2 text-[11px]">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: band.fill }} />
+              <span className="font-semibold text-slate-700">{band.label}</span>
+            </div>
+            <p className="mt-0.5 text-slate-500">{band.count} seats · {band.percentage}%</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProvincePartyHeatMatrix({
+  provinces,
+  parties,
+  onParty,
+  onProvince,
+}: {
+  provinces: ProvinceBreakdown[];
+  parties: PartyStanding[];
+  onParty: (p: string) => void;
+  onProvince: (id: number) => void;
+}) {
+  const topParties = useMemo(
+    () =>
+      parties
+        .filter((party) => party.totalSeats > 0 || party.totalVotes > 0)
+        .sort((a, b) => b.totalSeats - a.totalSeats || b.totalVotes - a.totalVotes)
+        .slice(0, 7)
+        .map((party) => ({ party: party.party, color: party.color })),
+    [parties]
+  );
+
+  const matrix = useMemo(() => {
+    return provinces.map((province) => {
+      const seatMap = new Map(province.parties.map((item) => [item.party, item.wins + item.leads]));
+      return {
+        provinceId: province.provinceId,
+        province: province.province,
+        cells: topParties.map((topParty) => ({
+          ...topParty,
+          seats: seatMap.get(topParty.party) ?? 0,
+        })),
+      };
+    });
+  }, [provinces, topParties]);
+
+  const maxCell = useMemo(
+    () => Math.max(...matrix.flatMap((row) => row.cells.map((cell) => cell.seats)), 1),
+    [matrix]
+  );
+
+  return (
+    <div className="glass-card p-6">
+      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Province x Party Control Matrix</h3>
+      <p className="mt-1 text-[11px] text-slate-400">Higher intensity means stronger seat control in that province.</p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-[720px] text-left text-xs">
+          <thead>
+            <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <th className="px-2 py-2">Province</th>
+              {topParties.map((party) => (
+                <th key={party.party} className="px-2 py-2 text-center">
+                  <button onClick={() => onParty(party.party)} className="rounded-md px-1.5 py-1 hover:bg-slate-100">
+                    {party.party}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.map((row) => (
+              <tr key={row.provinceId} className="border-t border-slate-100">
+                <td className="px-2 py-2.5">
+                  <button onClick={() => onProvince(row.provinceId)} className="font-semibold text-slate-700 hover:text-red-600">
+                    {row.province}
+                  </button>
+                </td>
+                {row.cells.map((cell) => {
+                  const intensity = cell.seats / maxCell;
+                  const bg = cell.seats > 0 ? colorWithAlpha(cell.color, 0.14 + intensity * 0.52) : "rgba(148,163,184,0.08)";
+                  const border = cell.seats > 0 ? colorWithAlpha(cell.color, 0.32 + intensity * 0.5) : "rgba(148,163,184,0.18)";
+                  return (
+                    <td key={`${row.provinceId}-${cell.party}`} className="px-2 py-2 text-center">
+                      <button
+                        onClick={() => (cell.seats > 0 ? onParty(cell.party) : onProvince(row.provinceId))}
+                        className="w-14 rounded-lg border px-1 py-1.5 text-xs font-bold text-slate-700 transition hover:-translate-y-0.5"
+                        style={{ backgroundColor: bg, borderColor: border }}
+                        title={`${row.province} · ${cell.party}: ${cell.seats} seats`}
+                      >
+                        {cell.seats > 0 ? cell.seats : "—"}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function CLink({ name, dId, cN, go }: { name: string; dId: number; cN: number; go: (d: number, c: number) => void }) {
   return <button onClick={() => go(dId, cN)} className="font-semibold text-red-600 hover:text-red-800 hover:underline">{name}</button>;
 }
@@ -998,20 +1480,56 @@ function AnalyticsPageInner() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<DrillView>({ type: "overview" });
-  const [history, setHistory] = useState<DrillView[]>([]);
-  const [urlApplied, setUrlApplied] = useState(false);
+  const [, setHistory] = useState<DrillView[]>([]);
   const [selectedProvinceDistrictId, setSelectedProvinceDistrictId] = useState<number | null>(null);
+  const [initialQuery] = useState(() => ({
+    view: searchParams.get("view"),
+    name: searchParams.get("name"),
+    id: searchParams.get("id"),
+    district: searchParams.get("district"),
+  }));
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/analytics");
         const json = await res.json();
-        if (json.success) setData(json.data as AnalyticsData);
+        if (json.success) {
+          const payload = json.data as AnalyticsData;
+          setData(payload);
+
+          const viewParam = initialQuery.view;
+          if (viewParam === "party") {
+            const name = initialQuery.name;
+            if (name && payload.partyStandings.some((party) => party.party === name)) {
+              setView({ type: "party", party: name });
+            }
+          } else if (viewParam === "province") {
+            const provinceId = Number(initialQuery.id);
+            if (provinceId && payload.provinceBreakdown.some((province) => province.provinceId === provinceId)) {
+              setView({ type: "province", provinceId });
+              const districtId = Number(initialQuery.district);
+              setSelectedProvinceDistrictId(Number.isFinite(districtId) && districtId > 0 ? districtId : null);
+            }
+          } else if (viewParam === "constituency") {
+            const slug = initialQuery.id || "";
+            for (const province of payload.provinceBreakdown) {
+              const constituency = province.constituencies.find((item) => item.constituencySlug === slug);
+              if (constituency) {
+                setView({
+                  type: "constituency",
+                  districtId: constituency.districtId,
+                  constNumber: constituency.constNumber,
+                });
+                break;
+              }
+            }
+          }
+        }
       } catch { /* */ }
       setLoading(false);
     })();
-  }, []);
+  }, [initialQuery]);
 
   // Apply correct party colors and logos from context data
   const correctedData = useMemo(() => {
@@ -1047,32 +1565,6 @@ function AnalyticsPageInner() {
     }
     return d;
   }, [data, ctxParties]);
-
-  // Apply URL params once data is loaded
-  useEffect(() => {
-    if (!data || urlApplied) return;
-    setUrlApplied(true);
-    const viewParam = searchParams.get("view");
-    if (viewParam === "party") {
-      const name = searchParams.get("name");
-      if (name && data.partyStandings.some((p) => p.party === name)) {
-        setView({ type: "party", party: name });
-      }
-    } else if (viewParam === "province") {
-      const id = Number(searchParams.get("id"));
-      if (id && data.provinceBreakdown.some((p) => p.provinceId === id)) {
-        setView({ type: "province", provinceId: id });
-        const districtId = Number(searchParams.get("district"));
-        setSelectedProvinceDistrictId(Number.isFinite(districtId) && districtId > 0 ? districtId : null);
-      }
-    } else if (viewParam === "constituency") {
-      const slug = searchParams.get("id") || "";
-      for (const prov of data.provinceBreakdown) {
-        const c = prov.constituencies.find((con) => con.constituencySlug === slug);
-        if (c) { setView({ type: "constituency", districtId: c.districtId, constNumber: c.constNumber }); break; }
-      }
-    }
-  }, [data, urlApplied, searchParams]);
 
   const navigate = useCallback((next: DrillView) => {
     setHistory((h) => [...h, view]);
@@ -1200,6 +1692,16 @@ function AnalyticsPageInner() {
             <TurnoutChart data={correctedData.turnoutByProvince} onProvince={onProvince} />
             <ProvinceCards provinces={correctedData.provinceBreakdown} onProvince={onProvince} />
           </div>
+          <div className="grid gap-6 xl:grid-cols-[1.8fr_1fr]">
+            <PartyMomentumBubble parties={correctedData.partyStandings} onParty={onParty} />
+            <CompetitivenessRadial provinces={correctedData.provinceBreakdown} />
+          </div>
+          <ProvincePartyHeatMatrix
+            provinces={correctedData.provinceBreakdown}
+            parties={correctedData.partyStandings}
+            onParty={onParty}
+            onProvince={onProvince}
+          />
           <PartyStandingsTable parties={correctedData.partyStandings} onParty={onParty} />
           <div className="grid gap-6 xl:grid-cols-2">
             <RacesTable races={correctedData.closestRaces} onC={onC} />
