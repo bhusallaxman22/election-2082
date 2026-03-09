@@ -13,6 +13,9 @@ interface PRParty {
   votes: number;
   votePercent: number;
   seats: number;
+  fptpWins?: number;
+  aboveThreshold?: boolean;
+  eligible?: boolean;
 }
 
 interface PRData {
@@ -74,11 +77,32 @@ export default function ProportionalResults() {
         <div className="space-y-2.5">
           {topParties.map((item) => {
             const barPct = (item.votes / maxVotes) * 100;
+            const isEligible = item.eligible ?? ((item.aboveThreshold ?? false) && (item.fptpWins ?? 0) >= 1);
+            const belowThreshold = item.aboveThreshold === false;
+            const noFptp = (item.fptpWins ?? 0) < 1;
+
+            const badgeText = isEligible
+              ? "Eligible"
+              : belowThreshold && noFptp
+                ? "Below 3% + No FPTP"
+                : belowThreshold
+                  ? "Below 3%"
+                  : "No FPTP";
+
+            const badgeClass = isEligible
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-rose-200 bg-rose-50 text-rose-700";
+
             return (
               <div key={item.symbolId} className="flex items-center gap-4">
                 <div className="flex items-center gap-2 w-36 shrink-0">
                   <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
-                  <span className="text-sm text-gray-600 truncate" title={item.nameNp}>{item.shortName}</span>
+                  <div className="min-w-0">
+                    <span className="block text-sm text-gray-600 truncate" title={item.nameNp}>{item.shortName}</span>
+                    <span className={`mt-0.5 inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${badgeClass}`}>
+                      {badgeText}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex-1 h-6 rounded-md bg-gray-50 overflow-hidden">
                   <div
@@ -154,32 +178,36 @@ export default function ProportionalResults() {
       <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900">
         <p className="font-bold">Notice</p>
         <p className="mt-1 leading-relaxed">
-          This dashboard provides a mathematical representation only. Actual seat allocation is contingent upon a party's
-          National Party Status (requiring a 3% PR threshold and at least 1 FPTP seat), attainment of minimum valid votes,
-          and strict adherence to inclusion criteria (including 33% female representation and ethnic cluster quotas).
+          This dashboard uses the Election Commission seat-division rule for House of Representatives PR allocation:
+          parties are included in the formula only if they secure at least 3% PR votes and at least 1 FPTP seat.
+          Parties failing either condition are excluded from PR seat division.
+        </p>
+        <p className="mt-2 leading-relaxed">
+          National-party status affects grants and symbol continuity, but parliamentary whip questions are separate legal issues.
+          As publicly explained by legal experts, a party that wins at least 2 seats can still form a parliamentary party and issue
+          binding whips to its lawmakers under the Political Party Act (Sections 24 and 28), even if it is not recognized as a national party.
         </p>
       </div>
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-700">
         <p className="font-bold text-slate-900">How are these seats calculated?</p>
         <p className="mt-1 leading-relaxed">
-          Seats are awarded one-by-one using the Modified Sainte-Lague method. It ensures the parliament reflects total vote
-          share while being fair to mid-sized parties.
+          Seats are awarded one-by-one using Sainte-Lague odd-number divisors. For federal PR, the top 110 quotients determine
+          seat allocation; for provincial PR, the same logic applies to 220 seats.
         </p>
         <div className="mt-3 space-y-2 leading-relaxed">
           <p>
-            <span className="font-semibold text-slate-900">1. The 3% Cut-off:</span> First, any party with less than 3% of
-            total votes is disqualified to prevent too many tiny parties.
+            <span className="font-semibold text-slate-900">1. Eligibility Gate:</span> A party must pass both conditions:
+            at least 3% PR vote share and at least 1 FPTP seat.
           </p>
           <p>
-            <span className="font-semibold text-slate-900">2. The "Penalty" Rule:</span> Every time a party wins a seat,
-            it becomes harder to win the next one. We divide by bigger numbers each round: <code>1.4</code>, then <code>3</code>,
-            <code>5</code>, <code>7</code>...
+            <span className="font-semibold text-slate-900">2. Quotient Sequence:</span> Divide each eligible party's votes by
+            <code>1, 3, 5, 7, 9, 11, ...</code>. Pick the highest quotient, award one seat, then continue until all seats are allocated.
           </p>
           <div className="rounded-lg border border-slate-200 bg-white p-3">
             <p className="font-semibold text-slate-900">Example: Awarding 2 Seats</p>
-            <p className="mt-1"><span className="font-semibold">Round 1:</span> Party A (10k) = 10,000 / 1.4 = 7,142; Party B (8k) = 8,000 / 1.4 = 5,714. Party A wins seat #1.</p>
-            <p className="mt-1"><span className="font-semibold">Round 2:</span> Party A now uses divisor 3 =&gt; 10,000 / 3 = 3,333; Party B remains at 1.4 =&gt; 8,000 / 1.4 = 5,714. Party B wins seat #2.</p>
+            <p className="mt-1"><span className="font-semibold">Round 1:</span> Party A (10k) = 10,000 / 1 = 10,000; Party B (8k) = 8,000 / 1 = 8,000. Party A wins seat #1.</p>
+            <p className="mt-1"><span className="font-semibold">Round 2:</span> Party A now uses divisor 3 =&gt; 10,000 / 3 = 3,333; Party B still uses divisor 1 =&gt; 8,000 / 1 = 8,000. Party B wins seat #2.</p>
           </div>
         </div>
       </div>

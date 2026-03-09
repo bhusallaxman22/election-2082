@@ -6,11 +6,11 @@ import { query } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const TOTAL_PR_SEATS = 110;
-const CACHE_KEY = "pr_party_results";
+const CACHE_KEY = "pr_party_results_v2";
 const CACHE_TTL = 120; // 2 minutes
 
 function sainteLagueDivisor(currentSeats: number): number {
-  if (currentSeats <= 0) return 1.4;
+  if (currentSeats <= 0) return 1;
   return currentSeats * 2 + 1; // 3,5,7...
 }
 
@@ -61,8 +61,8 @@ export async function GET() {
         };
       });
 
-    // Mathematical model per requested method: 3% cutoff + Modified Sainte-Lague sequence.
-    const eligible = partiesBase.filter((p) => p.aboveThreshold);
+    // Seat-division eligibility per supplied rule: 3% PR threshold AND at least one FPTP win.
+    const eligible = partiesBase.filter((p) => p.aboveThreshold && p.fptpWins >= 1);
 
     for (let i = 0; i < TOTAL_PR_SEATS; i += 1) {
       if (eligible.length === 0) break;
@@ -99,6 +99,7 @@ export async function GET() {
         seats: p.seats,
         fptpWins: p.fptpWins,
         aboveThreshold: p.aboveThreshold,
+        eligible: p.aboveThreshold && p.fptpWins >= 1,
       }));
 
     const result = {
@@ -106,7 +107,8 @@ export async function GET() {
       totalSeats: TOTAL_PR_SEATS,
       thresholdPercent: 3,
       thresholdVotes: Math.round(thresholdVotes),
-      method: "modified-sainte-lague",
+      method: "sainte-lague-odd-divisors",
+      eligibilityRule: "minimum-3-percent-pr-and-1-fptp-seat",
       parties,
     };
     await cacheSet(CACHE_KEY, result, CACHE_TTL);

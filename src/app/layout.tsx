@@ -23,13 +23,24 @@ export const metadata: Metadata = {
     "Nepal election live update for Federal Parliament Election 2082. Real-time counting, party-wise results, RSP and Nepali Congress updates, and constituency data.",
   keywords:
     "Nepal election, Nepal election live update, election live update, RSP, Nepali Congress, election 2082, Nepal federal election 2082, Nepal parliament election",
-  alternates: {
-    canonical: "/",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
   },
   icons: {
-    icon: [{ url: "/favicon.ico" }, { url: "/icon.png", type: "image/png" }],
+    icon: [{ url: "/favicon.ico" }, { url: "/icon", type: "image/png" }],
     shortcut: [{ url: "/favicon.ico" }],
-    apple: [{ url: "/apple-icon.png" }],
+    apple: [{ url: "/apple-icon" }],
   },
   openGraph: {
     title: "Nepal Election 2082 - Federal Parliament",
@@ -41,7 +52,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: "/opengraph-image.png",
+        url: "/opengraph-image",
         width: 1200,
         height: 630,
         alt: "Nepal Election 2082 share card",
@@ -53,7 +64,7 @@ export const metadata: Metadata = {
     title: "Nepal Election 2082 - Federal Parliament",
     description:
       "Real-time election results, constituency races, and province insights for Nepal Election 2082.",
-    images: ["/twitter-image.png"],
+    images: ["/twitter-image"],
   },
 };
 
