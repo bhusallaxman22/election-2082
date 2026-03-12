@@ -7,11 +7,15 @@ import Link from "next/link";
 
 export default function PartiesPage() {
   const { parties } = useElectionData();
+  const totalParliamentSeats = 275;
   const totalWins = parties.reduce((s, p) => s + p.wins, 0);
   const totalLeads = parties.reduce((s, p) => s + p.leads, 0);
-  const sorted = [...parties].sort((a, b) => (b.wins + b.leads) - (a.wins + a.leads));
-  const topParties = sorted.filter((p) => p.wins + p.leads > 0);
-  const otherParties = sorted.filter((p) => p.wins + p.leads === 0);
+  const sorted = [...parties].sort(
+    (a, b) => Math.max(b.totalSeats, b.wins + b.leads) - Math.max(a.totalSeats, a.wins + a.leads)
+  );
+  const topParties = sorted.filter((p) => Math.max(p.totalSeats, p.wins + p.leads) > 0);
+  const otherParties = sorted.filter((p) => Math.max(p.totalSeats, p.wins + p.leads) === 0);
+  const filledSeats = topParties.reduce((sum, party) => sum + Math.max(party.totalSeats, party.wins + party.leads), 0);
 
   return (
     <PageTemplate>
@@ -45,27 +49,30 @@ export default function PartiesPage() {
         <div className="glass-card p-6">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-base font-black text-slate-900">Seat Distribution</h2>
-            <span className="text-xs font-semibold text-slate-500">165 direct seats</span>
+            <span className="text-xs font-semibold text-slate-500">275 total seats · 165 direct + 110 PR</span>
           </div>
           <div className="flex h-12 overflow-hidden rounded-2xl bg-slate-100">
-            {topParties.map((p) => (
+            {topParties.map((p) => {
+              const partyTotal = Math.max(p.totalSeats, p.wins + p.leads);
+              return (
               <Link
                 key={p.id}
                 href={`/analytics?view=party&name=${encodeURIComponent(p.shortName)}`}
                 className="flex h-full items-center justify-center text-xs font-bold text-white transition-opacity hover:opacity-85"
                 style={{
-                  width: `${((p.wins + p.leads) / 165) * 100}%`,
+                  width: `${(partyTotal / totalParliamentSeats) * 100}%`,
                   backgroundColor: p.color,
-                  minWidth: (p.wins + p.leads) > 0 ? "20px" : "0",
+                  minWidth: partyTotal > 0 ? "20px" : "0",
                 }}
-                title={`${p.name} (${p.shortName}): ${p.wins + p.leads}`}
+                title={`${p.name} (${p.shortName}): ${partyTotal} seats`}
               >
-                {p.wins + p.leads > 3 ? p.shortName : ""}
+                {partyTotal > 3 ? p.shortName : ""}
               </Link>
-            ))}
+              );
+            })}
             <div
               className="flex h-full items-center justify-center bg-slate-200 text-xs text-slate-500"
-              style={{ width: `${((165 - totalWins - totalLeads) / 165) * 100}%` }}
+              style={{ width: `${(Math.max(totalParliamentSeats - filledSeats, 0) / totalParliamentSeats) * 100}%` }}
             />
           </div>
         </div>
@@ -73,8 +80,9 @@ export default function PartiesPage() {
         {/* Top Party Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {topParties.map((party) => {
-            const total = party.wins + party.leads;
-            const pct = ((total / 165) * 100).toFixed(1);
+            const total = Math.max(party.totalSeats, party.wins + party.leads);
+            const prSeats = Math.max(party.samanupatik, total - party.wins - party.leads, 0);
+            const pct = ((total / totalParliamentSeats) * 100).toFixed(1);
             return (
               <Link
                 key={party.id}
@@ -126,6 +134,9 @@ export default function PartiesPage() {
                       <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">Total</div>
                     </div>
                   </div>
+                  {prSeats > 0 && (
+                    <p className="mt-3 text-[11px] font-semibold text-slate-500">PR seats: {prSeats}</p>
+                  )}
 
                   {/* Seat share bar */}
                   <div className="mt-3">
@@ -135,8 +146,9 @@ export default function PartiesPage() {
                     </div>
                     <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                       <div className="h-full flex rounded-full overflow-hidden">
-                        <div className="h-full transition-all duration-500" style={{ width: `${(party.wins / 165) * 100}%`, backgroundColor: party.color }} />
-                        <div className="h-full transition-all duration-500" style={{ width: `${(party.leads / 165) * 100}%`, backgroundColor: party.color, opacity: 0.4 }} />
+                        <div className="h-full transition-all duration-500" style={{ width: `${(party.wins / totalParliamentSeats) * 100}%`, backgroundColor: party.color }} />
+                        <div className="h-full transition-all duration-500" style={{ width: `${(party.leads / totalParliamentSeats) * 100}%`, backgroundColor: party.color, opacity: 0.4 }} />
+                        {prSeats > 0 && <div className="h-full transition-all duration-500" style={{ width: `${(prSeats / totalParliamentSeats) * 100}%`, backgroundColor: party.color, opacity: 0.2 }} />}
                       </div>
                     </div>
                   </div>

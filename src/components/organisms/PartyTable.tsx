@@ -11,7 +11,7 @@ interface PartyTableProps {
 }
 
 export default function PartyTable({ parties, compact = false }: PartyTableProps) {
-  const maxLeads = Math.max(...parties.map((p) => p.wins + p.leads), 1);
+  const maxLeads = Math.max(...parties.map((p) => Math.max(p.totalSeats, p.wins + p.leads)), 1);
   const displayed = compact ? parties.slice(0, 8) : parties;
 
   return (

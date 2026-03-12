@@ -314,12 +314,12 @@ function ResultsContent() {
               </div>
               <div className="space-y-4">
                 {parties
-                  .filter((p) => p.wins + p.leads > 0)
-                  .sort((a, b) => (b.wins + b.leads) - (a.wins + a.leads))
+                  .filter((p) => Math.max(p.totalSeats, p.wins + p.leads) > 0)
+                  .sort((a, b) => Math.max(b.totalSeats, b.wins + b.leads) - Math.max(a.totalSeats, a.wins + a.leads))
                   .map((party) => {
-                    const total = party.wins + party.leads;
-                    const pct = (total / totalSeats) * 100;
-                    const partySlug = party.shortName.toLowerCase().replace(/[\s()]/g, "-");
+                    const total = Math.max(party.totalSeats, party.wins + party.leads);
+                    const prSeats = Math.max(party.samanupatik, total - party.wins - party.leads, 0);
+                    const pct = (total / 275) * 100;
                     return (
                       <Link
                         key={party.id}
@@ -354,7 +354,7 @@ function ResultsContent() {
                             />
                           </div>
                           <div className="flex justify-between mt-1 text-[10px] text-gray-400 font-medium">
-                            <span>Won: {party.wins} · Leading: {party.leads}</span>
+                            <span>Won: {party.wins} · Leading: {party.leads}{prSeats > 0 ? ` · PR: ${prSeats}` : ""}</span>
                             <span className="tabular-nums">{pct.toFixed(1)}%</span>
                           </div>
                         </div>

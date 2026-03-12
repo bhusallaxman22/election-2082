@@ -194,7 +194,9 @@ function sanitizeImageUrl(value: string | null | undefined): string {
 }
 
 function sortByMomentum(list: Party[]): Party[] {
-  return [...list].sort((a, b) => b.wins + b.leads - (a.wins + a.leads));
+  return [...list].sort(
+    (a, b) => Math.max(b.totalSeats, b.wins + b.leads) - Math.max(a.totalSeats, a.wins + a.leads)
+  );
 }
 
 function mapParty(api: APIPartyResult): Party {
