@@ -10,6 +10,7 @@ import { useElectionData } from "@/context/ElectionDataContext";
 import { provinces } from "@/data/provinces";
 import Link from "next/link";
 import Pagination, { usePagination } from "@/components/atoms/Pagination";
+import { getPartyPRSeats, getPartyTotalSeats } from "@/lib/party-seats";
 
 interface SeatResult {
   districtId: number;
@@ -40,6 +41,10 @@ interface SeatResult {
   }[];
 }
 
+const DIRECT_SEATS = 165;
+const PR_SEATS = 110;
+const TOTAL_PARLIAMENT_SEATS = DIRECT_SEATS + PR_SEATS;
+
 function ResultsContent() {
   const searchParams = useSearchParams();
   const statusFilter = searchParams.get("status");
@@ -51,7 +56,7 @@ function ResultsContent() {
   const [allSeats, setAllSeats] = useState<SeatResult[]>([]);
   const [seatsLoading, setSeatsLoading] = useState(false);
 
-  const totalSeats = 165;
+  const totalSeats = DIRECT_SEATS;
   const totalWins = parties.reduce((s, p) => s + p.wins, 0);
   const totalLeads = parties.reduce((s, p) => s + p.leads, 0);
   const progress = ((totalWins + totalLeads) / totalSeats) * 100;
@@ -314,12 +319,12 @@ function ResultsContent() {
               </div>
               <div className="space-y-4">
                 {parties
-                  .filter((p) => p.wins + p.leads > 0)
-                  .sort((a, b) => (b.wins + b.leads) - (a.wins + a.leads))
+                  .filter((p) => getPartyTotalSeats(p) > 0)
+                  .sort((a, b) => getPartyTotalSeats(b) - getPartyTotalSeats(a))
                   .map((party) => {
-                    const total = party.wins + party.leads;
-                    const pct = (total / totalSeats) * 100;
-                    const partySlug = party.shortName.toLowerCase().replace(/[\s()]/g, "-");
+                    const total = getPartyTotalSeats(party);
+                    const prSeats = getPartyPRSeats(party);
+                    const pct = (total / TOTAL_PARLIAMENT_SEATS) * 100;
                     return (
                       <Link
                         key={party.id}
@@ -354,7 +359,7 @@ function ResultsContent() {
                             />
                           </div>
                           <div className="flex justify-between mt-1 text-[10px] text-gray-400 font-medium">
-                            <span>Won: {party.wins} · Leading: {party.leads}</span>
+                            <span>Won: {party.wins} · Leading: {party.leads}{prSeats > 0 ? ` · PR: ${prSeats}` : ""}</span>
                             <span className="tabular-nums">{pct.toFixed(1)}%</span>
                           </div>
                         </div>

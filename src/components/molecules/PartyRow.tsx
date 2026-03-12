@@ -3,6 +3,7 @@
 import React from "react";
 import VoteBar from "../atoms/VoteBar";
 import type { Party } from "@/data/parties";
+import { getPartyPRSeats, getPartyTotalSeats } from "@/lib/party-seats";
 
 interface PartyRowProps {
   party: Party;
@@ -11,8 +12,9 @@ interface PartyRowProps {
 
 export default function PartyRow({ party, maxLeads }: PartyRowProps) {
   const [imageFailed, setImageFailed] = React.useState(false);
-  const percentage = maxLeads > 0 ? ((party.wins + party.leads) / maxLeads) * 100 : 0;
-  const total = party.wins + party.leads;
+  const total = getPartyTotalSeats(party);
+  const prSeats = getPartyPRSeats(party);
+  const percentage = maxLeads > 0 ? (total / maxLeads) * 100 : 0;
 
   return (
     <div
@@ -43,9 +45,14 @@ export default function PartyRow({ party, maxLeads }: PartyRowProps) {
             <span className="block truncate text-sm font-bold text-slate-800">{party.name}</span>
             <span className="block truncate text-[11px] text-slate-500">{party.nameNp}</span>
           </div>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
-            {total} total
-          </span>
+          <div className="text-right">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+              {total} total
+            </span>
+            {prSeats > 0 && (
+              <div className="mt-1 text-[10px] font-semibold text-slate-400">PR {prSeats}</div>
+            )}
+          </div>
         </div>
         <div className="mt-2">
           <VoteBar percentage={percentage} color={party.color} height={4} />

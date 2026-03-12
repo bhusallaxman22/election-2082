@@ -4,6 +4,7 @@ import React from "react";
 import PartyRow from "../molecules/PartyRow";
 import type { Party } from "@/data/parties";
 import Link from "next/link";
+import { getPartyTotalSeats } from "@/lib/party-seats";
 
 interface PartyTableProps {
   parties: Party[];
@@ -11,7 +12,7 @@ interface PartyTableProps {
 }
 
 export default function PartyTable({ parties, compact = false }: PartyTableProps) {
-  const maxLeads = Math.max(...parties.map((p) => p.wins + p.leads), 1);
+  const maxLeads = Math.max(...parties.map((p) => getPartyTotalSeats(p)), 1);
   const displayed = compact ? parties.slice(0, 8) : parties;
 
   return (

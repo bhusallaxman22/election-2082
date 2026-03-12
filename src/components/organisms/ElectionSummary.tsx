@@ -4,15 +4,23 @@ import React from "react";
 import Link from "next/link";
 import { useElectionData } from "@/context/ElectionDataContext";
 import { provinces } from "@/data/provinces";
+import { getPartyPRSeats, getPartyTotalSeats } from "@/lib/party-seats";
+
+const DIRECT_SEATS = 165;
+const PR_SEATS = 110;
+const TOTAL_PARLIAMENT_SEATS = DIRECT_SEATS + PR_SEATS;
 
 export default function ElectionSummary() {
   const { parties, loading, lastUpdated, provinceResults } = useElectionData();
-  const totalSeats = 165;
+  const totalSeats = DIRECT_SEATS;
   const totalWins = parties.reduce((sum, party) => sum + party.wins, 0);
   const totalLeads = parties.reduce((sum, party) => sum + party.leads, 0);
   const remaining = Math.max(totalSeats - totalWins - totalLeads, 0);
   const progress = ((totalWins + totalLeads) / totalSeats) * 100;
-  const topParties = parties.filter((party) => party.wins + party.leads > 0).slice(0, 5);
+  const topParties = [...parties]
+    .filter((party) => getPartyTotalSeats(party) > 0)
+    .sort((a, b) => getPartyTotalSeats(b) - getPartyTotalSeats(a))
+    .slice(0, 5);
 
   return (
     <div className="glass-card overflow-hidden p-0">
@@ -89,7 +97,10 @@ export default function ElectionSummary() {
           <div className="rounded-3xl border border-slate-800/80 bg-slate-950 p-5 text-white">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Top Parties</p>
             <div className="mt-4 space-y-3">
-              {topParties.map((party) => (
+              {topParties.map((party) => {
+                const partyTotal = getPartyTotalSeats(party);
+                const prSeats = getPartyPRSeats(party);
+                return (
                 <Link
                   key={party.id}
                   href={`/analytics?view=party&name=${encodeURIComponent(party.shortName)}`}
@@ -104,12 +115,19 @@ export default function ElectionSummary() {
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-bold">{party.shortName}</div>
-                      <div className="truncate text-[11px] text-slate-400">{party.nameNp}</div>
+                      <div className="truncate text-[11px] text-slate-400">
+                        {party.nameNp}
+                        {prSeats > 0 && ` · PR ${prSeats}`}
+                      </div>
                     </div>
                   </div>
-                  <span className="text-xl font-black">{party.wins + party.leads}</span>
+                  <span className="text-xl font-black">{partyTotal}</span>
                 </Link>
-              ))}
+                );
+              })}
+            </div>
+            <div className="mt-4 text-[11px] font-medium text-slate-400">
+              Total parliamentary seats: {TOTAL_PARLIAMENT_SEATS} ({DIRECT_SEATS} direct + {PR_SEATS} PR)
             </div>
           </div>
         </div>

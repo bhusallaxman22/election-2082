@@ -68,7 +68,7 @@ export async function GET() {
     // Fetch PR data
     let prParties: { shortName: string; color: string; seats: number; votes: number; votePercent: number }[] = [];
     try {
-      const prCached = await cacheGet<{ parties: typeof prParties }>("pr_party_results");
+      const prCached = await cacheGet<{ parties: typeof prParties }>("pr_party_results_v2");
       if (prCached?.parties) prParties = prCached.parties;
     } catch { /* */ }
 
