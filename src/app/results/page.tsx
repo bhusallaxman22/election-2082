@@ -10,6 +10,7 @@ import { useElectionData } from "@/context/ElectionDataContext";
 import { provinces } from "@/data/provinces";
 import Link from "next/link";
 import Pagination, { usePagination } from "@/components/atoms/Pagination";
+import { getPartyPRSeats, getPartyTotalSeats } from "@/lib/party-seats";
 
 interface SeatResult {
   districtId: number;
@@ -40,6 +41,10 @@ interface SeatResult {
   }[];
 }
 
+const DIRECT_SEATS = 165;
+const PR_SEATS = 110;
+const TOTAL_PARLIAMENT_SEATS = DIRECT_SEATS + PR_SEATS;
+
 function ResultsContent() {
   const searchParams = useSearchParams();
   const statusFilter = searchParams.get("status");
@@ -51,7 +56,7 @@ function ResultsContent() {
   const [allSeats, setAllSeats] = useState<SeatResult[]>([]);
   const [seatsLoading, setSeatsLoading] = useState(false);
 
-  const totalSeats = 165;
+  const totalSeats = DIRECT_SEATS;
   const totalWins = parties.reduce((s, p) => s + p.wins, 0);
   const totalLeads = parties.reduce((s, p) => s + p.leads, 0);
   const progress = ((totalWins + totalLeads) / totalSeats) * 100;
@@ -314,12 +319,12 @@ function ResultsContent() {
               </div>
               <div className="space-y-4">
                 {parties
-                  .filter((p) => Math.max(p.totalSeats, p.wins + p.leads) > 0)
-                  .sort((a, b) => Math.max(b.totalSeats, b.wins + b.leads) - Math.max(a.totalSeats, a.wins + a.leads))
+                  .filter((p) => getPartyTotalSeats(p) > 0)
+                  .sort((a, b) => getPartyTotalSeats(b) - getPartyTotalSeats(a))
                   .map((party) => {
-                    const total = Math.max(party.totalSeats, party.wins + party.leads);
-                    const prSeats = Math.max(party.samanupatik, total - party.wins - party.leads, 0);
-                    const pct = (total / 275) * 100;
+                    const total = getPartyTotalSeats(party);
+                    const prSeats = getPartyPRSeats(party);
+                    const pct = (total / TOTAL_PARLIAMENT_SEATS) * 100;
                     return (
                       <Link
                         key={party.id}

@@ -3,6 +3,7 @@
 import React from "react";
 import VoteBar from "../atoms/VoteBar";
 import type { Party } from "@/data/parties";
+import { getPartyPRSeats, getPartyTotalSeats } from "@/lib/party-seats";
 
 interface PartyRowProps {
   party: Party;
@@ -11,8 +12,8 @@ interface PartyRowProps {
 
 export default function PartyRow({ party, maxLeads }: PartyRowProps) {
   const [imageFailed, setImageFailed] = React.useState(false);
-  const total = Math.max(party.totalSeats, party.wins + party.leads);
-  const prSeats = Math.max(party.samanupatik, total - party.wins - party.leads, 0);
+  const total = getPartyTotalSeats(party);
+  const prSeats = getPartyPRSeats(party);
   const percentage = maxLeads > 0 ? (total / maxLeads) * 100 : 0;
 
   return (

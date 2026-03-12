@@ -6,6 +6,7 @@ import { parties as fallbackParties } from "@/data/parties";
 import { popularCandidates as fallbackCandidates } from "@/data/candidates";
 import { provinces } from "@/data/provinces";
 import { candidateImageMap } from "@/data/imageMap";
+import { getPartyTotalSeats } from "@/lib/party-seats";
 
 const ELECTION_API_URL = "/api/election";
 const CANDIDATES_API_URL = "/api/candidates";
@@ -194,9 +195,7 @@ function sanitizeImageUrl(value: string | null | undefined): string {
 }
 
 function sortByMomentum(list: Party[]): Party[] {
-  return [...list].sort(
-    (a, b) => Math.max(b.totalSeats, b.wins + b.leads) - Math.max(a.totalSeats, a.wins + a.leads)
-  );
+  return [...list].sort((a, b) => getPartyTotalSeats(b) - getPartyTotalSeats(a));
 }
 
 function mapParty(api: APIPartyResult): Party {
