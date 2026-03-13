@@ -11,9 +11,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${siteUrl}/results`, lastModified: now, changeFrequency: "hourly", priority: 0.95 },
     { url: `${siteUrl}/parties`, lastModified: now, changeFrequency: "daily", priority: 0.85 },
     { url: `${siteUrl}/provinces`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
+    { url: `${siteUrl}/analytics`, lastModified: now, changeFrequency: "daily", priority: 0.75 },
   ];
-
-  const partyPages: MetadataRoute.Sitemap = [];
 
   const provincePages: MetadataRoute.Sitemap = provinces.map((province) => ({
     url: `${siteUrl}/provinces/${province.id}`,
@@ -22,5 +21,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...partyPages, ...provincePages];
+  return [...staticPages, ...provincePages];
 }
