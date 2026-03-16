@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { cacheGet } from "@/lib/redis";
+import { query } from "@/lib/db";
+import { ensureSchema } from "@/lib/migrate";
 import { loadSeatResults, type SeatResult } from "@/lib/seat-results";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +14,21 @@ const PROV_NAMES: Record<number, string> = {
 const PROV_SEATS: Record<number, number> = {
   1: 28, 2: 32, 3: 33, 4: 18, 5: 26, 6: 12, 7: 16,
 };
+
+interface PRPartySummary {
+  shortName: string;
+  color: string;
+  seats: number;
+  votes: number;
+  votePercent: number;
+}
+
+interface StoredPRSnapshot {
+  result?: {
+    parties?: Array<Partial<PRPartySummary>>;
+  };
+  parties?: Array<Partial<PRPartySummary>>;
+}
 
 function normalizeSeat(seat: SeatResult): SeatResult {
   const candidates = [...(seat.candidates || [])].sort((a, b) => b.votes - a.votes);
@@ -44,17 +61,51 @@ function normalizeSeat(seat: SeatResult): SeatResult {
   };
 }
 
+async function loadPRParties(): Promise<PRPartySummary[]> {
+  try {
+    const prCached = await cacheGet<{ parties?: PRPartySummary[] }>("pr_party_results_v3");
+    if (Array.isArray(prCached?.parties) && prCached.parties.length > 0) {
+      return prCached.parties;
+    }
+  } catch {
+    // fall through to DB snapshot
+  }
+
+  try {
+    await ensureSchema();
+    const rows = await query<{ meta_value: string }>(
+      "SELECT meta_value FROM election_meta WHERE meta_key = 'pr_party_results' LIMIT 1"
+    );
+    const raw = rows[0]?.meta_value;
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw) as StoredPRSnapshot;
+    const sourceParties = Array.isArray(parsed.result?.parties)
+      ? parsed.result.parties
+      : Array.isArray(parsed.parties)
+        ? parsed.parties
+        : [];
+
+    return sourceParties
+      .filter((party) => typeof party?.shortName === "string" && party.shortName.trim().length > 0)
+      .map((party) => ({
+        shortName: String(party.shortName || ""),
+        color: String(party.color || "#94a3b8"),
+        seats: Number(party.seats || 0),
+        votes: Number(party.votes || 0),
+        votePercent: Number(party.votePercent || 0),
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
   try {
     const { seats: rawSeats } = await loadSeatResults();
     const seats = rawSeats.map(normalizeSeat);
 
-    // Fetch PR data
-    let prParties: { shortName: string; color: string; seats: number; votes: number; votePercent: number }[] = [];
-    try {
-      const prCached = await cacheGet<{ parties: typeof prParties }>("pr_party_results_v3");
-      if (prCached?.parties) prParties = prCached.parties;
-    } catch { /* */ }
+    const prParties = await loadPRParties();
 
     // --- Compute analytics ---
     const declared = seats.filter((s) => s.status === "won").length;
@@ -147,9 +198,9 @@ export async function GET() {
         color: pr.color || "#94a3b8", fptpWins: 0, fptpLeads: 0, prSeats: 0,
         totalVotes: 0, prVotes: 0, prVotePercent: 0, constituencies: [], provinceWise: new Map(),
       };
-      existing.prSeats = pr.seats || 0;
-      existing.prVotes = pr.votes || 0;
-      existing.prVotePercent = pr.votePercent || 0;
+      existing.prSeats = Math.max(existing.prSeats, pr.seats || 0);
+      existing.prVotes = Math.max(existing.prVotes, pr.votes || 0);
+      existing.prVotePercent = Math.max(existing.prVotePercent, pr.votePercent || 0);
       if (!partyMap.has(pr.shortName)) existing.color = pr.color || "#94a3b8";
       partyMap.set(pr.shortName, existing);
     }
