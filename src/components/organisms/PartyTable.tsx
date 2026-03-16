@@ -19,7 +19,7 @@ export default function PartyTable({ parties, compact = false }: PartyTableProps
     <div className="glass-card overflow-hidden">
       <div className="flex items-center justify-between border-b border-slate-100/70 px-6 py-5">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Live Board</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Seat Board</p>
           <h2 className="mt-1 text-base font-black text-slate-900">Party Results</h2>
         </div>
         {compact && (

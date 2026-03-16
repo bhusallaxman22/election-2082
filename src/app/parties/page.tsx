@@ -5,6 +5,7 @@ import PageTemplate from "@/components/templates/PageTemplate";
 import { useElectionData } from "@/context/ElectionDataContext";
 import Link from "next/link";
 import { getPartyPRSeats, getPartyTotalSeats } from "@/lib/party-seats";
+import PartyConstituencyMap from "@/components/organisms/PartyConstituencyMap";
 
 const DIRECT_SEATS = 165;
 const PR_SEATS = 110;
@@ -13,13 +14,13 @@ const TOTAL_PARLIAMENT_SEATS = DIRECT_SEATS + PR_SEATS;
 export default function PartiesPage() {
   const { parties } = useElectionData();
   const totalWins = parties.reduce((s, p) => s + p.wins, 0);
-  const totalLeads = parties.reduce((s, p) => s + p.leads, 0);
   const sorted = [...parties].sort(
     (a, b) => getPartyTotalSeats(b) - getPartyTotalSeats(a)
   );
   const topParties = sorted.filter((p) => getPartyTotalSeats(p) > 0);
   const otherParties = sorted.filter((p) => getPartyTotalSeats(p) === 0);
   const filledSeats = topParties.reduce((sum, party) => sum + getPartyTotalSeats(party), 0);
+  const totalPrSeats = topParties.reduce((sum, party) => sum + getPartyPRSeats(party), 0);
 
   return (
     <PageTemplate>
@@ -30,7 +31,7 @@ export default function PartiesPage() {
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Party Monitor</p>
               <h1 className="mt-2 text-2xl font-black text-slate-900">Political Parties</h1>
-              <p className="mt-2 text-sm text-slate-600">Live standings for the federal parliament race.</p>
+              <p className="mt-2 text-sm text-slate-600">Final party standings for the federal parliament.</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl border border-slate-200/70 bg-white/75 px-4 py-3 text-center">
@@ -39,15 +40,17 @@ export default function PartiesPage() {
               </div>
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/85 px-4 py-3 text-center">
                 <div className="text-2xl font-black text-emerald-700">{totalWins}</div>
-                <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Won</div>
+                <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Direct Won</div>
               </div>
               <div className="rounded-2xl border border-amber-100 bg-amber-50/85 px-4 py-3 text-center">
-                <div className="text-2xl font-black text-amber-700">{totalLeads}</div>
-                <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Leading</div>
+                <div className="text-2xl font-black text-amber-700">{totalPrSeats}</div>
+                <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">PR Seats</div>
               </div>
             </div>
           </div>
         </div>
+
+        <PartyConstituencyMap parties={parties} />
 
         {/* Seat Distribution Bar */}
         <div className="glass-card p-6">

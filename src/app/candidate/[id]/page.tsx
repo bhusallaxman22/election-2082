@@ -4,6 +4,7 @@ import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
 import PageTemplate from "@/components/templates/PageTemplate";
 import Avatar from "@/components/atoms/Avatar";
+import { CLIENT_FETCH_CACHE } from "@/lib/results-mode";
 
 interface Competitor {
   id: string;
@@ -90,7 +91,7 @@ function CandidateProfile({ candidateId }: { candidateId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/candidate/${candidateId}`)
+    fetch(`/api/candidate/${candidateId}`, { cache: CLIENT_FETCH_CACHE })
       .then((r) => r.json())
       .then((json) => {
         if (json.success) setData(json.data);

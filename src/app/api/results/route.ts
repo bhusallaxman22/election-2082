@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { proportionalResults2079, proportionalResults2074 } from "@/data/provinces";
-import { cacheGet } from "@/lib/redis";
-import { query } from "@/lib/db";
-import { ensureSchema } from "@/lib/migrate";
+import { proportionalResults2074, proportionalResults2079 } from "@/data/provinces";
+import { loadSeatResults } from "@/lib/seat-results";
 
 export const dynamic = "force-dynamic";
+
+const PROVINCES: Record<number, { name: string; totalSeats: number }> = {
+  1: { name: "Koshi", totalSeats: 28 },
+  2: { name: "Madhesh", totalSeats: 32 },
+  3: { name: "Bagmati", totalSeats: 33 },
+  4: { name: "Gandaki", totalSeats: 18 },
+  5: { name: "Lumbini", totalSeats: 26 },
+  6: { name: "Karnali", totalSeats: 12 },
+  7: { name: "Sudurpaschim", totalSeats: 16 },
+};
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -17,76 +25,88 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Try Redis (pre-warmed by sync)
-    const cached = await cacheGet<unknown>("results_summary");
-    if (cached) {
-      return NextResponse.json({ success: true, data: cached, meta: { timestamp: new Date().toISOString(), source: "redis" } });
+    const { seats, source } = await loadSeatResults();
+    const partyMap = new Map<
+      string,
+      { color: string; wins: number; leads: number }
+    >();
+    const provinceMap = new Map<
+      number,
+      Map<string, { color: string; wins: number; leads: number }>
+    >();
+
+    let declared = 0;
+    let counting = 0;
+
+    for (const seat of seats) {
+      const isWon = seat.status === "won";
+      const isLead = seat.status === "leading" || seat.status === "counting";
+
+      if (isWon) declared++;
+      else if (isLead) counting++;
+
+      if (!seat.partyShortName || (!isWon && !isLead)) continue;
+
+      const partyEntry = partyMap.get(seat.partyShortName) || {
+        color: seat.partyColor || "#94a3b8",
+        wins: 0,
+        leads: 0,
+      };
+      if (isWon) partyEntry.wins++;
+      if (isLead) partyEntry.leads++;
+      partyMap.set(seat.partyShortName, partyEntry);
+
+      const provinceEntry =
+        provinceMap.get(seat.provinceId) ||
+        new Map<string, { color: string; wins: number; leads: number }>();
+      const provinceParty = provinceEntry.get(seat.partyShortName) || {
+        color: seat.partyColor || "#94a3b8",
+        wins: 0,
+        leads: 0,
+      };
+      if (isWon) provinceParty.wins++;
+      if (isLead) provinceParty.leads++;
+      provinceEntry.set(seat.partyShortName, provinceParty);
+      provinceMap.set(seat.provinceId, provinceEntry);
     }
 
-    // 2. Fallback to MariaDB
-    await ensureSchema();
-    const partyRows = await query<{
-      party_id: number;
-      party_slug: string;
-      party_nickname: string;
-      party_color: string;
-      leading_count: number;
-      winner_count: number;
-    }>("SELECT party_id, party_slug, party_nickname, party_color, leading_count, winner_count FROM party_results ORDER BY (winner_count + leading_count) DESC");
-
-    // Try to get province-wise results from election_meta (pre-computed by sync)
-    let provinceWise: unknown[] = [];
-    try {
-      const metaRows = await query<{ meta_value: string }>(
-        "SELECT meta_value FROM election_meta WHERE meta_key = 'province_results'"
-      );
-      if (metaRows.length > 0) {
-        const raw = typeof metaRows[0].meta_value === 'string' ? JSON.parse(metaRows[0].meta_value) : metaRows[0].meta_value;
-        // raw is Record<number, {party, color, wins, leads}[]>
-        const PROV_NAMES: Record<number, { name: string; totalSeats: number }> = {
-          1: { name: "Koshi", totalSeats: 28 },
-          2: { name: "Madhesh", totalSeats: 32 },
-          3: { name: "Bagmati", totalSeats: 33 },
-          4: { name: "Gandaki", totalSeats: 18 },
-          5: { name: "Lumbini", totalSeats: 26 },
-          6: { name: "Karnali", totalSeats: 12 },
-          7: { name: "Sudurpaschim", totalSeats: 16 },
-        };
-        provinceWise = Object.entries(PROV_NAMES).map(([id, info]) => ({
-          province: info.name,
-          totalSeats: info.totalSeats,
-          results: (raw[id] ?? []).map((r: { party: string; color: string; wins: number; leads: number }) => ({
-            partyShortName: r.party,
-            partyColor: r.color,
-            wins: r.wins,
-            leads: r.leads,
-          })),
-        }));
-      }
-    } catch { /* */ }
-
-    const totalSeats = 165;
-    const declared = partyRows.reduce((sum, p) => sum + (p.winner_count ?? 0), 0);
-    const counting = partyRows.reduce((sum, p) => sum + (p.leading_count ?? 0), 0);
+    const provinceWise = Object.entries(PROVINCES).map(([id, info]) => ({
+      province: info.name,
+      totalSeats: info.totalSeats,
+      results: Array.from(provinceMap.get(Number(id))?.entries() || [])
+        .map(([party, value]) => ({
+          partyShortName: party,
+          partyColor: value.color,
+          wins: value.wins,
+          leads: value.leads,
+        }))
+        .sort((a, b) => (b.wins + b.leads) - (a.wins + a.leads) || b.wins - a.wins),
+    }));
 
     const data = {
-      totalSeats,
+      totalSeats: 165,
       declared,
       counting,
-      remaining: totalSeats - declared - counting,
-      partyWise: partyRows
-        .filter((p) => (p.winner_count ?? 0) > 0 || (p.leading_count ?? 0) > 0)
-        .map((p) => ({
-          party: p.party_nickname ?? p.party_slug,
-          color: p.party_color,
-          wins: p.winner_count,
-          leads: p.leading_count,
-          total: (p.winner_count ?? 0) + (p.leading_count ?? 0),
-        })),
+      remaining: Math.max(165 - declared - counting, 0),
+      partyWise: Array.from(partyMap.entries())
+        .map(([party, value]) => ({
+          party,
+          color: value.color,
+          wins: value.wins,
+          leads: value.leads,
+          total: value.wins + value.leads,
+        }))
+        .sort((a, b) => b.total - a.total || b.wins - a.wins),
       provinceWise,
     };
 
-    return NextResponse.json({ success: true, data, meta: { timestamp: new Date().toISOString(), source: "db" } });
+    return NextResponse.json({
+      success: true,
+      data,
+      meta: { timestamp: new Date().toISOString(), source },
+    }, {
+      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=1800" },
+    });
   } catch {
     return NextResponse.json(
       { success: false, data: null, meta: { timestamp: new Date().toISOString() } },

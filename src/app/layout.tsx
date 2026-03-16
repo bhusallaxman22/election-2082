@@ -20,9 +20,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Nepal Election 2082 - Federal Parliament Election Results",
   description:
-    "Nepal election live update for Federal Parliament Election 2082. Real-time counting, party-wise results, RSP and Nepali Congress updates, and constituency data.",
+    "Nepal federal parliament election 2082 final results with party-wise counts, constituency summaries, and province analysis.",
   keywords:
-    "Nepal election, Nepal election live update, election live update, RSP, Nepali Congress, election 2082, Nepal federal election 2082, Nepal parliament election",
+    "Nepal election, Nepal election results, election 2082, RSP, Nepali Congress, Nepal federal election 2082, Nepal parliament election, constituency results",
   robots: {
     index: true,
     follow: true,
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Nepal Election 2082 - Federal Parliament",
     description:
-      "Real-time election results, constituency races, and province insights for Nepal Election 2082.",
+      "Final election results, constituency summaries, and province insights for Nepal Election 2082.",
     type: "website",
     url: "/",
     siteName: "Election 2082",
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Nepal Election 2082 - Federal Parliament",
     description:
-      "Real-time election results, constituency races, and province insights for Nepal Election 2082.",
+      "Final election results, constituency summaries, and province insights for Nepal Election 2082.",
     images: ["/twitter-image"],
   },
 };

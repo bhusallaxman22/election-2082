@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { proportionalResults2079, proportionalResults2074 } from "@/data/provinces";
 import { Tabs } from "antd";
+import { CLIENT_FETCH_CACHE, ENABLE_CLIENT_POLLING } from "@/lib/results-mode";
 
 interface PRParty {
   symbolId: number;
@@ -40,15 +41,18 @@ export default function ProportionalResults() {
     let mounted = true;
     async function fetchPR() {
       try {
-        const res = await fetch("/api/pr-results", { cache: "no-store" });
+        const res = await fetch("/api/pr-results", { cache: CLIENT_FETCH_CACHE });
         if (!res.ok) return;
         const data: PRData = await res.json();
         if (mounted && data.parties?.length > 0) setPrData(data);
       } catch { /* silent */ }
     }
     fetchPR();
-    const interval = setInterval(fetchPR, 60_000);
-    return () => { mounted = false; clearInterval(interval); };
+    const interval = ENABLE_CLIENT_POLLING ? setInterval(fetchPR, 60_000) : null;
+    return () => {
+      mounted = false;
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   const renderPRChart = (data: PRData) => {
@@ -201,7 +205,7 @@ export default function ProportionalResults() {
             at least 3% PR vote share and at least 1 FPTP seat.
           </p>
           <p>
-            <span className="font-semibold text-slate-900">2. Quotient Sequence:</span> Divide each eligible party's votes by
+            <span className="font-semibold text-slate-900">2. Quotient Sequence:</span> Divide each eligible party&apos;s votes by
             <code>1, 3, 5, 7, 9, 11, ...</code>. Pick the highest quotient, award one seat, then continue until all seats are allocated.
           </p>
           <div className="rounded-lg border border-slate-200 bg-white p-3">

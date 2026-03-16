@@ -13,7 +13,7 @@ export default function Footer() {
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Election 2082</p>
             <h3 className="mt-2 text-xl font-black text-white">Federal Parliament Tracker</h3>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-400">
-              Cleaner, live election tracking with party momentum, constituency races, and province snapshots in one place.
+              Final results dashboard with party distribution, constituency summaries, and province-level analysis in one place.
             </p>
           </div>
 

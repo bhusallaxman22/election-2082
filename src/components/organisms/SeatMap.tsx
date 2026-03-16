@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { provinces } from "@/data/provinces";
+import { CLIENT_FETCH_CACHE, ENABLE_CLIENT_POLLING, ENABLE_SSE_UPDATES } from "@/lib/results-mode";
 
 interface SeatData {
   districtId: number;
@@ -193,7 +194,7 @@ export default function SeatMap({
   useEffect(() => {
     const fetchSeats = async () => {
       try {
-        const res = await fetch("/api/all-results", { cache: "no-store" });
+        const res = await fetch("/api/all-results", { cache: CLIENT_FETCH_CACHE });
         const json = await res.json();
         if (json.success) {
           setSeats(json.data);
@@ -205,7 +206,7 @@ export default function SeatMap({
 
     const fetchPR = async () => {
       try {
-        const res = await fetch("/api/pr-results", { cache: "no-store" });
+        const res = await fetch("/api/pr-results", { cache: CLIENT_FETCH_CACHE });
         const json = await res.json();
         if (json.parties) {
           setPRParties(
@@ -229,14 +230,16 @@ export default function SeatMap({
     fetchSeats();
     fetchPR();
 
-    // Poll every 2 minutes for fresh data
-    const pollInterval = setInterval(() => {
-      fetchSeats();
-      fetchPR();
-    }, 120_000);
+    const pollInterval = ENABLE_CLIENT_POLLING
+      ? setInterval(() => {
+          fetchSeats();
+          fetchPR();
+        }, 120_000)
+      : null;
 
     let eventSource: EventSource | null = null;
-    try {
+    if (ENABLE_SSE_UPDATES) {
+      try {
       eventSource = new EventSource("/api/sse");
       eventSource.onmessage = (event) => {
         try {
@@ -249,12 +252,13 @@ export default function SeatMap({
           // ignore parse errors
         }
       };
-    } catch {
-      // no-op
+      } catch {
+        // no-op
+      }
     }
 
     return () => {
-      clearInterval(pollInterval);
+      if (pollInterval) clearInterval(pollInterval);
       if (eventSource) eventSource.close();
     };
   }, []);

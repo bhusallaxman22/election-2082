@@ -11,6 +11,7 @@ import { provinces } from "@/data/provinces";
 import Link from "next/link";
 import Pagination, { usePagination } from "@/components/atoms/Pagination";
 import { getPartyPRSeats, getPartyTotalSeats } from "@/lib/party-seats";
+import { CLIENT_FETCH_CACHE } from "@/lib/results-mode";
 
 interface SeatResult {
   districtId: number;
@@ -59,23 +60,31 @@ function ResultsContent() {
   const totalSeats = DIRECT_SEATS;
   const totalWins = parties.reduce((s, p) => s + p.wins, 0);
   const totalLeads = parties.reduce((s, p) => s + p.leads, 0);
-  const progress = ((totalWins + totalLeads) / totalSeats) * 100;
+  const progress = (totalWins / totalSeats) * 100;
 
   const hasFilter = statusFilter || partyFilter || constituencyFilter || searchFilter;
+  const requestRichBreakdowns = Boolean(searchFilter || constituencyFilter);
 
   // Fetch all seat data when filters are applied
   useEffect(() => {
     if (!hasFilter) return;
+    const params = new URLSearchParams();
+    if (statusFilter) params.set("status", statusFilter);
+    if (partyFilter) params.set("party", partyFilter);
+    if (constituencyFilter) params.set("constituency", constituencyFilter);
+    if (searchFilter) params.set("search", searchFilter);
+    if (requestRichBreakdowns) params.set("hydrate", "1");
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSeatsLoading(true);
-    fetch("/api/all-results", { cache: "no-store" })
+    fetch(`/api/all-results?${params.toString()}`, { cache: CLIENT_FETCH_CACHE })
       .then((r) => r.json())
       .then((json) => {
         if (json.success) setAllSeats(json.data);
       })
       .catch(() => {})
       .finally(() => setSeatsLoading(false));
-  }, [hasFilter]);
+  }, [constituencyFilter, hasFilter, partyFilter, requestRichBreakdowns, searchFilter, statusFilter]);
 
   // Filter seats based on query params
   const filteredSeats = useMemo(() => {
@@ -147,11 +156,11 @@ function ResultsContent() {
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">
-                  {filterTitle || "Live Results"}
+                  {filterTitle || "Election Results"}
                 </h1>
                 <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Final
                 </span>
               </div>
               <p className="text-sm text-gray-400">
@@ -160,7 +169,7 @@ function ResultsContent() {
                     ← Clear filters · Show all results
                   </Link>
                 ) : (
-                  "Nationwide counting status and leading parties"
+                  "Final federal parliament results and constituency summaries"
                 )}
               </p>
             </div>
@@ -238,6 +247,9 @@ function ResultsContent() {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 stagger-children">
                   {filteredPg.pageItems.map((seat) => {
                       const isWon = seat.status === "won";
+                      const nonZeroCandidates = seat.candidates.filter((candidate) => candidate.votes > 0);
+                      const hasRichBreakdown = nonZeroCandidates.length > 1 && seat.totalVotes > seat.leaderVotes;
+                      const visibleCandidates = (hasRichBreakdown ? nonZeroCandidates : nonZeroCandidates.slice(0, 1)).slice(0, 4);
                       return (
                         <div key={`${seat.districtId}-${seat.constNumber}`} className="card group hover:shadow-lg transition-all">
                           <div className="h-1 rounded-t-2xl" style={{ backgroundColor: seat.partyColor }} />
@@ -257,14 +269,14 @@ function ResultsContent() {
                                 </span>
                               ) : seat.totalVotes > 0 ? (
                                 <span className="flex items-center gap-1 text-[10px] text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Live
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Recorded
                                 </span>
                               ) : (
                                 <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">Pending</span>
                               )}
                             </div>
                             <div className="space-y-2">
-                              {seat.candidates.slice(0, 4).map((c, i) => (
+                              {visibleCandidates.map((c, i) => (
                                 <div key={c.id} className={`flex items-center gap-2 ${i > 0 ? "opacity-60" : ""}`}>
                                   <Avatar name={c.name} color={c.partyColor} size={22} src={c.photo || `/api/candidate-image/${c.id}`} />
                                   <Link href={`/candidate/${c.id}`} className="text-xs text-gray-700 truncate flex-1 hover:text-red-600 transition-colors">{c.name}</Link>
@@ -281,6 +293,11 @@ function ResultsContent() {
                                 </div>
                               ))}
                             </div>
+                            {!hasRichBreakdown && seat.totalVotes > 0 && (
+                              <div className="mt-2 text-[10px] text-gray-400">
+                                Full candidate tally is available on the constituency view.
+                              </div>
+                            )}
                             {seat.totalVotes > 0 && (
                               <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
                                 <span>{seat.totalVotes.toLocaleString()} votes</span>
@@ -289,6 +306,14 @@ function ResultsContent() {
                                 )}
                               </div>
                             )}
+                            <div className="mt-2">
+                              <Link
+                                href={`/analytics?view=constituency&id=${seat.constituencySlug}`}
+                                className="text-[10px] font-semibold text-red-600 transition-colors hover:text-red-700"
+                              >
+                                Open constituency details →
+                              </Link>
+                            </div>
                           </div>
                         </div>
                       );

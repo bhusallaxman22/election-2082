@@ -3,6 +3,7 @@
  * Uses ioredis for MariaDB-like connection reliability.
  */
 import Redis from "ioredis";
+import { FINAL_RESULTS_MODE } from "@/lib/results-mode";
 
 let client: Redis | null = null;
 let subClient: Redis | null = null;
@@ -49,6 +50,7 @@ const DEFAULT_TTL = 120; // seconds
  * Get a cached value, parsed from JSON.
  */
 export async function cacheGet<T = unknown>(key: string): Promise<T | null> {
+  if (FINAL_RESULTS_MODE) return null;
   try {
     const raw = await getRedis().get(key);
     if (!raw) return null;

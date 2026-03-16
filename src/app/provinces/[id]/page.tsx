@@ -11,6 +11,7 @@ import { provinces } from "@/data/provinces";
 import type { DistrictData } from "@/data/provinces";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { CLIENT_FETCH_CACHE, ENABLE_CLIENT_POLLING } from "@/lib/results-mode";
 
 const ProvinceMapPanel = dynamic(
   () => import("@/components/organisms/ProvinceMapPanel"),
@@ -85,13 +86,10 @@ export default function ProvinceDetailPage() {
     if (!province) return;
     const fetchSeats = async () => {
       try {
-        const res = await fetch("/api/all-results", { cache: "no-store" });
+        const res = await fetch(`/api/all-results?provinceId=${province.id}`, { cache: CLIENT_FETCH_CACHE });
         const json = await res.json();
         if (json.success) {
-          const filtered = (json.data as SeatResult[]).filter(
-            (s) => s.provinceId === province.id
-          );
-          setProvinceSeats(filtered);
+          setProvinceSeats(json.data as SeatResult[]);
         }
       } catch {
         // silent
@@ -100,8 +98,10 @@ export default function ProvinceDetailPage() {
       }
     };
     fetchSeats();
-    const interval = setInterval(fetchSeats, 60_000);
-    return () => clearInterval(interval);
+    const interval = ENABLE_CLIENT_POLLING ? setInterval(fetchSeats, 60_000) : null;
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [province]);
 
   // Derive top counting and neck-and-neck races
@@ -197,7 +197,7 @@ export default function ProvinceDetailPage() {
             </span>
           ) : result.totalVotes > 0 ? (
             <span className="flex items-center gap-1.5 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Counting
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Recorded
             </span>
           ) : (
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Pending</span>
@@ -331,7 +331,7 @@ export default function ProvinceDetailPage() {
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-gray-800">{seat.constituency}</span>
                       <span className="flex items-center gap-1 text-[10px] text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Live
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Recorded
                       </span>
                     </div>
                     <div className="space-y-1.5">
@@ -465,7 +465,7 @@ export default function ProvinceDetailPage() {
         </div>
       )}
 
-      <div id="live-results" className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div id="province-results" className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Party Results — Left column */}
         <div className="lg:col-span-1">
           <div className="card p-5 lg:sticky lg:top-20">
@@ -478,7 +478,6 @@ export default function ProvinceDetailPage() {
                 .map((r, i) => {
                   const total = r.leads + r.wins;
                   const pct = province.totalSeats > 0 ? (total / province.totalSeats) * 100 : 0;
-                  const partySlug = r.partyShortName.toLowerCase().replace(/[\s()]/g, "-");
                   return (
                     <Link
                       key={i}
@@ -519,8 +518,8 @@ export default function ProvinceDetailPage() {
         <div className="lg:col-span-2 space-y-3">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-1 h-5 bg-blue-500 rounded-full" />
-            <h2 className="text-sm font-bold text-gray-800">Live Constituency Results</h2>
-            <span className="ml-auto text-xs text-gray-400">Click a seat to view live results</span>
+            <h2 className="text-sm font-bold text-gray-800">Constituency Results</h2>
+            <span className="ml-auto text-xs text-gray-400">Click a seat to view the constituency summary</span>
           </div>
 
           {province.districts.map((d: DistrictData) => {

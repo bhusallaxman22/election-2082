@@ -14,9 +14,8 @@ export default function ElectionSummary() {
   const { parties, loading, lastUpdated, provinceResults } = useElectionData();
   const totalSeats = DIRECT_SEATS;
   const totalWins = parties.reduce((sum, party) => sum + party.wins, 0);
-  const totalLeads = parties.reduce((sum, party) => sum + party.leads, 0);
-  const remaining = Math.max(totalSeats - totalWins - totalLeads, 0);
-  const progress = ((totalWins + totalLeads) / totalSeats) * 100;
+  const declared = totalWins;
+  const progress = (declared / totalSeats) * 100;
   const topParties = [...parties]
     .filter((party) => getPartyTotalSeats(party) > 0)
     .sort((a, b) => getPartyTotalSeats(b) - getPartyTotalSeats(a))
@@ -28,14 +27,14 @@ export default function ElectionSummary() {
       <div className="p-6 sm:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">National Feed</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Election Snapshot</p>
             <h2 className="mt-2 text-3xl font-black text-slate-900">Federal Election 2082</h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Real-time parliamentary race updates with province coverage and constituency momentum.
+              Final federal parliament results with party distribution, province breakdowns, and constituency summaries.
             </p>
             {lastUpdated && (
               <p className="mt-3 text-xs font-medium text-slate-500">
-                {loading ? "Refreshing…" : "Last synced"} at {lastUpdated.toLocaleTimeString()}
+                {loading ? "Refreshing snapshot…" : "Snapshot updated"} at {lastUpdated.toLocaleTimeString()}
               </p>
             )}
           </div>
@@ -43,19 +42,19 @@ export default function ElectionSummary() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Link href="/results" className="rounded-2xl border border-slate-200/70 bg-white/75 px-4 py-3 text-center transition-colors hover:bg-white">
               <div className="text-3xl font-black text-slate-900 tabular-nums">{totalSeats}</div>
-              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Total</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Direct Seats</div>
             </Link>
             <Link href="/results?status=won" className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-center transition-colors hover:bg-emerald-50">
-              <div className="text-3xl font-black text-emerald-700 tabular-nums">{totalWins}</div>
-              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Won</div>
+              <div className="text-3xl font-black text-emerald-700 tabular-nums">{declared}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Declared</div>
             </Link>
-            <Link href="/results?status=leading" className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-center transition-colors hover:bg-amber-50">
-              <div className="text-3xl font-black text-amber-700 tabular-nums">{totalLeads}</div>
-              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Leading</div>
+            <Link href="/parties" className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-center transition-colors hover:bg-amber-50">
+              <div className="text-3xl font-black text-amber-700 tabular-nums">{PR_SEATS}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">PR Seats</div>
             </Link>
-            <Link href="/results?status=pending" className="rounded-2xl border border-slate-200/70 bg-slate-50/75 px-4 py-3 text-center transition-colors hover:bg-slate-100/70">
-              <div className="text-3xl font-black text-slate-600 tabular-nums">{remaining}</div>
-              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Pending</div>
+            <Link href="/analytics" className="rounded-2xl border border-slate-200/70 bg-slate-50/75 px-4 py-3 text-center transition-colors hover:bg-slate-100/70">
+              <div className="text-3xl font-black text-slate-600 tabular-nums">{TOTAL_PARLIAMENT_SEATS}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Parliament</div>
             </Link>
           </div>
         </div>
@@ -63,7 +62,7 @@ export default function ElectionSummary() {
         <div className="mt-7 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
           <div className="rounded-3xl border border-white/70 bg-white/72 p-5">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">Counting progress</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">Direct seats declared</span>
               <span className="text-sm font-black text-slate-800">{progress.toFixed(1)}%</span>
             </div>
             <div className="h-3 overflow-hidden rounded-full bg-slate-100">

@@ -65,10 +65,10 @@ export default function TwitterImage() {
               Federal Parliament Tracker
             </div>
             <div style={{ fontSize: "30px", marginTop: "15px", color: "#cbd5e1" }}>
-              Real-time votes, constituencies and party momentum
+              Final results, constituency summaries and party distribution
             </div>
             <div style={{ fontSize: "24px", marginTop: "26px", color: "#f9a8d4", fontWeight: 700 }}>
-              Updated continuously
+              Final results snapshot
             </div>
           </div>
         </div>

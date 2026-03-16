@@ -25,7 +25,7 @@ export default function HomePage() {
           url: siteUrl,
           inLanguage: "en",
           description:
-            "Nepal election live update with federal parliament election 2082 results, party-wise counts and constituency details.",
+            "Nepal federal parliament election 2082 final results with party-wise counts, constituency summaries, and province analysis.",
           potentialAction: {
             "@type": "SearchAction",
             target: `${siteUrl}/results?search={search_term_string}`,
@@ -40,11 +40,11 @@ export default function HomePage() {
         },
         {
           "@type": "WebPage",
-          name: "Nepal Election Live Update 2082",
+          name: "Nepal Election Results 2082",
           url: siteUrl,
           about: [
             "Nepal Election",
-            "Nepal Election Live Update",
+            "Nepal Election Results",
             "Nepal Federal Election 2082",
             "Nepal Parliament Election",
             "RSP",
@@ -100,7 +100,7 @@ export default function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="glass-card p-8 text-center text-sm font-semibold text-slate-500">Waiting for candidate feed…</div>
+            <div className="glass-card p-8 text-center text-sm font-semibold text-slate-500">Candidate summary unavailable.</div>
           )}
         </section>
 
@@ -111,16 +111,16 @@ export default function HomePage() {
         <section className="animate-fade-in">
           <div className="glass-card p-6 sm:p-8">
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">SEO Landing Content</p>
-            <h2 className="mt-2 text-xl font-black text-slate-900">Nepal Election Live Update And Results 2082</h2>
+            <h2 className="mt-2 text-xl font-black text-slate-900">Nepal Election Results And Analysis 2082</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Election.bhusallaxman.com.np provides Nepal election live update coverage for Nepal federal election 2082
-              and Nepal parliament election races. Track constituency-level vote counting, live result movement, and
-              updates for major parties including RSP, Nepali Congress, CPN-UML, Maoist, NCP, and independents.
+              Election.bhusallaxman.com.np provides final Nepal federal election 2082 results with constituency-level
+              summaries, province breakdowns, and party comparisons for RSP, Nepali Congress, CPN-UML, Maoist, NCP,
+              and independents.
             </p>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              If you are searching for Nepal election, election live update, election 2082, Nepal federal election 2082,
-              or Nepal parliament election updates, this dashboard is built to provide fast and clear public result
-              tracking in one place.
+              If you are searching for Nepal election results, election 2082, Nepal federal election 2082, or Nepal
+              parliament election summaries, this dashboard is built to provide a fast and clear public results overview
+              in one place.
             </p>
           </div>
         </section>

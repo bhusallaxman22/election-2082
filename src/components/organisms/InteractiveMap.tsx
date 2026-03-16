@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { provinces } from "@/data/provinces";
 import type { FeatureCollection, Feature, Geometry } from "geojson";
@@ -34,6 +34,12 @@ interface ProvinceProperties {
   name: string;
 }
 
+interface DistrictTooltipData {
+  title?: string;
+  subtitle?: string;
+  meta?: string;
+}
+
 interface InteractiveMapProps {
   /** If set, only show districts for this province */
   provinceId?: number;
@@ -53,6 +59,10 @@ interface InteractiveMapProps {
   showHeatmap?: boolean;
   /** Optional district metric map for heatmap mode */
   districtValueMap?: Record<number, number>;
+  /** Optional district fill override map */
+  districtColorMap?: Record<number, string>;
+  /** Optional tooltip copy override map */
+  districtTooltipMap?: Record<number, DistrictTooltipData>;
   /** Max zoom to use when fitting bounds */
   fitMaxZoom?: number;
   /** Padding for fit bounds */
@@ -67,6 +77,45 @@ function heatColor(value: number, maxValue: number): string {
   if (t < 0.6) return "#60a5fa";
   if (t < 0.8) return "#3b82f6";
   return "#1d4ed8";
+}
+
+function shadeColor(hex: string, amount = -0.14): string {
+  const normalized = hex.replace("#", "");
+  const expanded = normalized.length === 3
+    ? normalized.split("").map((char) => char + char).join("")
+    : normalized;
+  const value = Number.parseInt(expanded, 16);
+  if (!Number.isFinite(value)) return hex;
+
+  const delta = Math.round(255 * amount);
+  const r = Math.max(0, Math.min(255, (value >> 16) + delta));
+  const g = Math.max(0, Math.min(255, ((value >> 8) & 0xff) + delta));
+  const b = Math.max(0, Math.min(255, (value & 0xff) + delta));
+
+  return `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function buildTooltipContent(
+  props: DistrictProperties,
+  info: { name: string; provinceId: number; provinceName: string; slug: string; constituencies: number } | undefined,
+  showHeatmap: boolean,
+  districtValue: number,
+  customTooltip?: DistrictTooltipData
+): string {
+  const title = customTooltip?.title || props.name;
+  const subtitle =
+    customTooltip?.subtitle ||
+    `${info?.provinceName || ""} · ${props.constituencies} ${props.constituencies === 1 ? "constituency" : "constituencies"}`;
+  const meta = customTooltip?.meta
+    || (showHeatmap ? `Votes: ${districtValue.toLocaleString()}` : "");
+
+  return `
+    <div style="font-family: system-ui; padding: 2px 0;">
+      <div style="font-weight: 700; font-size: 13px; color: #1e293b;">${title}</div>
+      <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${subtitle}</div>
+      ${meta ? `<div style="font-size: 11px; color: #334155; margin-top: 2px; font-weight: 600;">${meta}</div>` : ""}
+    </div>
+  `;
 }
 
 async function loadGeoData(includeProvinces: boolean) {
@@ -104,6 +153,8 @@ export default function InteractiveMap({
   showLabels = false,
   showHeatmap = false,
   districtValueMap = {},
+  districtColorMap = {},
+  districtTooltipMap = {},
   fitMaxZoom,
   fitPadding,
 }: InteractiveMapProps) {
@@ -118,18 +169,24 @@ export default function InteractiveMap({
   const onProvinceClickRef = useRef(onProvinceClick);
   const selectedDistrictRef = useRef<number | null>(selectedDistrictId);
   const districtValueMapRef = useRef<Record<number, number>>(districtValueMap);
+  const districtColorMapRef = useRef<Record<number, string>>(districtColorMap);
+  const districtTooltipMapRef = useRef<Record<number, DistrictTooltipData>>(districtTooltipMap);
   const showHeatmapRef = useRef(showHeatmap);
   const [loading, setLoading] = useState(true);
   const [L, setL] = useState<typeof import("leaflet") | null>(null);
   const resolvedPadding = fitPadding ?? DEFAULT_FIT_PADDING;
+  const paddingX = resolvedPadding[0];
+  const paddingY = resolvedPadding[1];
 
   useEffect(() => {
     onDistrictClickRef.current = onDistrictClick;
     onProvinceClickRef.current = onProvinceClick;
     selectedDistrictRef.current = selectedDistrictId;
     districtValueMapRef.current = districtValueMap;
+    districtColorMapRef.current = districtColorMap;
+    districtTooltipMapRef.current = districtTooltipMap;
     showHeatmapRef.current = showHeatmap;
-  }, [onDistrictClick, onProvinceClick, selectedDistrictId, districtValueMap, showHeatmap]);
+  }, [onDistrictClick, onProvinceClick, selectedDistrictId, districtValueMap, districtColorMap, districtTooltipMap, showHeatmap]);
 
   // Build district lookup from provinces data
   const districtLookup = useMemo(() => {
@@ -220,10 +277,12 @@ export default function InteractiveMap({
         const distLayer = L.geoJSON(filteredDistricts, {
           style: (feature) => {
             const props = feature?.properties as DistrictProperties;
-            const color = PROVINCE_COLORS[props.provinceId] || "#94a3b8";
+            const color = districtColorMapRef.current[props.districtId] || PROVINCE_COLORS[props.provinceId] || "#94a3b8";
             const isSelected = selectedDistrictRef.current === props.districtId;
             const districtMetric = districtValueMapRef.current[props.districtId] || 0;
-            const fillColor = showHeatmapRef.current
+            const fillColor = districtColorMapRef.current[props.districtId]
+              ? color
+              : showHeatmapRef.current
               ? heatColor(districtMetric, maxHeatValue)
               : (isSelected ? PROVINCE_HOVER[props.provinceId] || "#64748b" : color);
             return {
@@ -239,15 +298,13 @@ export default function InteractiveMap({
             const info = districtLookup[props.districtId];
 
             // Tooltip
-            const tooltipContent = `
-              <div style="font-family: system-ui; padding: 2px 0;">
-                <div style="font-weight: 700; font-size: 13px; color: #1e293b;">${props.name}</div>
-                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-                  ${info?.provinceName || ""} · ${props.constituencies} ${props.constituencies === 1 ? "constituency" : "constituencies"}
-                </div>
-                ${showHeatmapRef.current ? `<div style="font-size: 11px; color: #334155; margin-top: 2px; font-weight: 600;">Votes: ${(districtValueMapRef.current[props.districtId] || 0).toLocaleString()}</div>` : ""}
-              </div>
-            `;
+            const tooltipContent = buildTooltipContent(
+              props,
+              info,
+              showHeatmapRef.current,
+              districtValueMapRef.current[props.districtId] || 0,
+              districtTooltipMapRef.current[props.districtId]
+            );
             layer.bindTooltip(tooltipContent, {
               sticky: true,
               direction: "top",
@@ -257,7 +314,10 @@ export default function InteractiveMap({
 
             // Hover effects
             layer.on("mouseover", () => {
-              const hoverColor = PROVINCE_HOVER[props.provinceId] || "#64748b";
+              const baseColor = districtColorMapRef.current[props.districtId] || PROVINCE_HOVER[props.provinceId] || "#64748b";
+              const hoverColor = districtColorMapRef.current[props.districtId]
+                ? shadeColor(baseColor, -0.12)
+                : baseColor;
               (layer as L.Path).setStyle({
                 fillColor: hoverColor,
                 fillOpacity: 0.85,
@@ -347,7 +407,7 @@ export default function InteractiveMap({
         const bounds = distLayer.getBounds();
         if (bounds.isValid()) {
           map.fitBounds(bounds, {
-            padding: resolvedPadding,
+            padding: [paddingX, paddingY],
             maxZoom: fitMaxZoom ?? (provinceId ? 10 : 8),
           });
         }
@@ -359,7 +419,7 @@ export default function InteractiveMap({
     };
 
     loadData();
-  }, [L, provinceId, showProvinceBorders, router, districtLookup, showLabels, fitMaxZoom, resolvedPadding[0], resolvedPadding[1]]);
+  }, [L, provinceId, showProvinceBorders, router, districtLookup, showLabels, fitMaxZoom, paddingX, paddingY]);
 
   // Lightweight style refresh without rebuilding layers
   useEffect(() => {
@@ -377,9 +437,13 @@ export default function InteractiveMap({
       const props = path.feature?.properties;
       if (!props) return;
       const isSelected = selectedDistrictId === props.districtId;
-      const base = PROVINCE_COLORS[props.provinceId] || "#94a3b8";
+      const base = districtColorMap[props.districtId] || PROVINCE_COLORS[props.provinceId] || "#94a3b8";
       const metric = districtValueMap[props.districtId] || 0;
-      const fillColor = showHeatmap ? heatColor(metric, maxHeatValue) : (isSelected ? PROVINCE_HOVER[props.provinceId] || "#64748b" : base);
+      const fillColor = districtColorMap[props.districtId]
+        ? base
+        : showHeatmap
+          ? heatColor(metric, maxHeatValue)
+          : (isSelected ? PROVINCE_HOVER[props.provinceId] || "#64748b" : base);
       path.setStyle({
         fillColor,
         fillOpacity: isSelected ? 0.9 : (showHeatmap ? 0.75 : 0.6),
@@ -388,7 +452,34 @@ export default function InteractiveMap({
         opacity: 0.9,
       });
     });
-  }, [L, selectedDistrictId, showHeatmap, districtValueMap]);
+  }, [L, selectedDistrictId, showHeatmap, districtValueMap, districtColorMap]);
+
+  useEffect(() => {
+    if (!geoLayerRef.current) return;
+
+    geoLayerRef.current.eachLayer((layer) => {
+      const path = layer as L.Path & { feature?: Feature<Geometry, DistrictProperties>; unbindTooltip?: () => void; bindTooltip: typeof layer.bindTooltip };
+      const props = path.feature?.properties;
+      if (!props) return;
+      const info = districtLookup[props.districtId];
+      path.unbindTooltip?.();
+      path.bindTooltip(
+        buildTooltipContent(
+          props,
+          info,
+          showHeatmap,
+          districtValueMap[props.districtId] || 0,
+          districtTooltipMap[props.districtId]
+        ),
+        {
+          sticky: true,
+          direction: "top",
+          offset: [0, -10],
+          className: "map-tooltip",
+        }
+      );
+    });
+  }, [districtLookup, districtTooltipMap, districtValueMap, showHeatmap]);
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">

@@ -7,6 +7,7 @@ import { popularCandidates as fallbackCandidates } from "@/data/candidates";
 import { provinces } from "@/data/provinces";
 import { candidateImageMap } from "@/data/imageMap";
 import { getPartyTotalSeats } from "@/lib/party-seats";
+import { CLIENT_FETCH_CACHE, ENABLE_CLIENT_POLLING } from "@/lib/results-mode";
 
 const ELECTION_API_URL = "/api/election";
 const CANDIDATES_API_URL = "/api/candidates";
@@ -333,9 +334,9 @@ export function ElectionDataProvider({ children }: { children: React.ReactNode }
 
   const fetchAll = useCallback(async () => {
     const [electionRes, candidatesRes, resultsRes] = await Promise.allSettled([
-      fetch(ELECTION_API_URL, { cache: "no-store" }),
-      fetch(CANDIDATES_API_URL, { cache: "no-store" }),
-      fetch(RESULTS_API_URL, { cache: "no-store" }),
+      fetch(ELECTION_API_URL, { cache: CLIENT_FETCH_CACHE }),
+      fetch(CANDIDATES_API_URL, { cache: CLIENT_FETCH_CACHE }),
+      fetch(RESULTS_API_URL, { cache: CLIENT_FETCH_CACHE }),
     ]);
 
     let hadError = false;
@@ -412,12 +413,14 @@ export function ElectionDataProvider({ children }: { children: React.ReactNode }
 
     setLastUpdated(new Date());
     setLoading(false);
-    setError(hadError ? "Some live feeds are temporarily unavailable. Showing fallback data where needed." : null);
+    setError(hadError ? "Some summary endpoints are temporarily unavailable. Showing fallback data where needed." : null);
   }, []);
 
   useEffect(() => {
     fetchAll();
-    intervalRef.current = setInterval(fetchAll, POLL_INTERVAL);
+    if (ENABLE_CLIENT_POLLING) {
+      intervalRef.current = setInterval(fetchAll, POLL_INTERVAL);
+    }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };

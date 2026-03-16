@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:final-results": "node scripts/import-final-results.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

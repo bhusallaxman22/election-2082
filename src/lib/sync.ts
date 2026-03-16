@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { query, execute } from "./db";
 import { cacheSet, publish, CHANNEL_ELECTION_UPDATE } from "./redis";
 import { ensureSchema } from "./migrate";
+import { ENABLE_BACKGROUND_SYNC, FINAL_RESULTS_MODE } from "./results-mode";
 import {
   fetchECConstituencyResults,
   fetchECDistricts,
@@ -19,6 +20,10 @@ import {
   type ECCandidate,
 } from "./ec-api";
 import { provinces } from "@/data/provinces";
+
+// Election is finalized: keep data source DB-first unless explicitly re-enabled.
+const EXTERNAL_SYNC_ENABLED =
+  !FINAL_RESULTS_MODE && process.env.ENABLE_EXTERNAL_SYNC === "true";
 
 // ── Complete district → constituency mapping (authoritative, 165 seats) ──
 
@@ -239,14 +244,14 @@ async function syncParties(): Promise<number> {
 async function syncConstituencies(): Promise<number> {
   const allConst = getAllConstituencies();
   let changed = 0;
-  const batchSize = 5; // Keep small to avoid 429 rate limits
+  const batchSize = 1; // SecureJson rate-limits aggressively on constituency files.
 
   for (let i = 0; i < allConst.length; i += batchSize) {
     const batch = allConst.slice(i, i + batchSize);
     // Small delay between batches to avoid rate limiting
-    if (i > 0) await new Promise((r) => setTimeout(r, 500));
+    if (i > 0) await new Promise((r) => setTimeout(r, 250));
 
-    const batchResults = await Promise.allSettled(
+    await Promise.allSettled(
       batch.map(async (c) => {
         let candidates: ECCandidate[];
         try {
@@ -386,6 +391,142 @@ async function syncConstituencies(): Promise<number> {
   }
 
   return changed;
+}
+
+async function syncSingleConstituency(
+  districtId: number,
+  constNum: number
+): Promise<{
+  changed: boolean;
+  status: "won" | "leading" | "pending";
+  totalVotes: number;
+}> {
+  const district = ALL_DISTRICTS.find((d) => d.districtId === districtId);
+  if (!district || constNum < 1 || constNum > district.constituencies) {
+    throw new Error(`Invalid constituency: district ${districtId}, const ${constNum}`);
+  }
+
+  const candidates = await fetchECConstituencyResults(districtId, constNum);
+  const sorted = [...candidates].sort(
+    (a, b) => b.TotalVoteReceived - a.TotalVoteReceived
+  );
+  const totalVotes = sorted.reduce((s, cd) => s + cd.TotalVoteReceived, 0);
+
+  const hash = md5(
+    JSON.stringify(
+      sorted.map((cd) => [cd.CandidateID, cd.TotalVoteReceived, cd.Remarks])
+    )
+  );
+
+  const existing = await query<{ data_hash: string | null }>(
+    "SELECT data_hash FROM constituency_results WHERE district_id = ? AND const_number = ?",
+    [districtId, constNum]
+  );
+
+  const hasWinner = sorted.some((cd) => cd.Remarks === "Elected");
+  const hasVotes = totalVotes > 0;
+  const status: "won" | "leading" | "pending" = hasWinner
+    ? "won"
+    : hasVotes
+      ? "leading"
+      : "pending";
+
+  if (existing.length > 0 && existing[0].data_hash === hash) {
+    return { changed: false, status, totalVotes };
+  }
+
+  const districtName = DISTRICT_NAME_MAP[districtId] ?? `District-${districtId}`;
+  const leader = sorted[0];
+  const runnerUp = sorted[1];
+  const leaderMeta = leader
+    ? getPartyMeta(leader.SymbolID, leader.PoliticalPartyName)
+    : null;
+
+  const candidatesJson = sorted.map((cd, idx) => {
+    const party = getPartyMeta(cd.SymbolID, cd.PoliticalPartyName);
+    return {
+      id: String(cd.CandidateID),
+      name: cd.CandidateName,
+      partyShortName: party.shortName,
+      partyFullName: cd.PoliticalPartyName,
+      partyColor: party.color,
+      symbolName: cd.SymbolName,
+      symbolId: cd.SymbolID,
+      votes: cd.TotalVoteReceived,
+      photo: `/api/candidate-image/${cd.CandidateID}`,
+      status:
+        cd.Remarks === "Elected"
+          ? "won"
+          : idx === 0 && hasVotes
+            ? "leading"
+            : hasVotes
+              ? "trailing"
+              : "pending",
+      margin:
+        idx === 0 && sorted.length > 1
+          ? cd.TotalVoteReceived - sorted[1].TotalVoteReceived
+          : undefined,
+      gender: cd.Gender,
+      age: cd.Age,
+      rank: cd.Rank,
+      remarks: cd.Remarks,
+      dob: cd.DOB,
+      qualification: cd.QUALIFICATION,
+      address: cd.ADDRESS,
+      castedVote: cd.CastedVote,
+      totalVoters: cd.TotalVoters,
+    };
+  });
+
+  await execute(
+    `INSERT INTO constituency_results
+      (district_id, const_number, district_name, province_id, province_name,
+       constituency_name, constituency_slug, leader_name, leader_party,
+       leader_party_color, leader_votes, runner_up_name, runner_up_votes,
+       margin, total_votes, status, candidates_json, data_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       district_name = VALUES(district_name),
+       province_id = VALUES(province_id),
+       province_name = VALUES(province_name),
+       constituency_name = VALUES(constituency_name),
+       constituency_slug = VALUES(constituency_slug),
+       leader_name = VALUES(leader_name),
+       leader_party = VALUES(leader_party),
+       leader_party_color = VALUES(leader_party_color),
+       leader_votes = VALUES(leader_votes),
+       runner_up_name = VALUES(runner_up_name),
+       runner_up_votes = VALUES(runner_up_votes),
+       margin = VALUES(margin),
+       total_votes = VALUES(total_votes),
+       status = VALUES(status),
+       candidates_json = VALUES(candidates_json),
+       data_hash = VALUES(data_hash)`,
+    [
+      districtId,
+      constNum,
+      districtName,
+      district.provinceId,
+      district.provinceName,
+      `${districtName}-${constNum}`,
+      `${districtName.toLowerCase().replace(/\s+/g, "-")}-${constNum}`,
+      leader?.CandidateName ?? "",
+      leaderMeta?.shortName ?? "—",
+      leaderMeta?.color ?? "#9E9E9E",
+      leader?.TotalVoteReceived ?? 0,
+      runnerUp?.CandidateName ?? "",
+      runnerUp?.TotalVoteReceived ?? 0,
+      leader && runnerUp
+        ? leader.TotalVoteReceived - runnerUp.TotalVoteReceived
+        : 0,
+      totalVotes,
+      status,
+      JSON.stringify(candidatesJson),
+      hash,
+    ]
+  );
+
+  return { changed: true, status, totalVotes };
 }
 
 // ── Sync districts from EC API (with hardcoded fallback) ─────────────
@@ -802,36 +943,52 @@ async function preWarmRedis(): Promise<void> {
 
 let syncing = false;
 
-export async function runSync(): Promise<{
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function waitForSyncIdle(timeoutMs = 120_000): Promise<boolean> {
+  const startedAt = Date.now();
+  while (syncing) {
+    if (Date.now() - startedAt > timeoutMs) return false;
+    await delay(500);
+  }
+  return true;
+}
+
+async function executeExternalSyncCycle(
+  syncType: "full" | "external-backfill",
+  options?: { includeConstituencies?: boolean }
+): Promise<{
   partiesChanged: number;
   constituenciesChanged: number;
 }> {
-  if (syncing) return { partiesChanged: 0, constituenciesChanged: 0 };
-  syncing = true;
+  await ensureSchema();
+
+  const includeConstituencies = options?.includeConstituencies === true;
+  const logSyncType = syncType === "external-backfill" ? "full" : syncType;
+
+  await execute(
+    "INSERT INTO sync_log (sync_type, status) VALUES (?, 'running')",
+    [logSyncType]
+  );
+  const logRows = await query<{ id: number }>(
+    "SELECT LAST_INSERT_ID() as id"
+  );
+  const logId = logRows[0]?.id;
 
   try {
-    await ensureSchema();
-
-    // Log sync start
-    await execute(
-      "INSERT INTO sync_log (sync_type, status) VALUES ('full', 'running')"
-    );
-    const logRows = await query<{ id: number }>(
-      "SELECT LAST_INSERT_ID() as id"
-    );
-    const logId = logRows[0]?.id;
-
-    // Run all syncs — districts FIRST (needed for constituency enumeration)
+    // Districts first (needed for constituency metadata).
     await syncDistricts();
     const partiesChanged = await syncParties();
-    const constituenciesChanged = await syncConstituencies();
-    // Additional EC API data
+    const constituenciesChanged = includeConstituencies
+      ? await syncConstituencies()
+      : 0;
     await syncECParties();
     await syncECStates();
 
     const totalChanged = partiesChanged + constituenciesChanged;
 
-    // Update sync log
     if (logId) {
       await execute(
         `UPDATE sync_log SET finished_at = NOW(), rows_changed = ?, status = 'success' WHERE id = ?`,
@@ -839,11 +996,8 @@ export async function runSync(): Promise<{
       );
     }
 
-    // ★ Pre-warm ALL Redis caches after every sync (even if no changes,
-    //   in case Redis was restarted and caches expired)
     await preWarmRedis();
 
-    // Publish SSE event if anything changed
     if (totalChanged > 0) {
       await publish(CHANNEL_ELECTION_UPDATE, {
         type: "sync_complete",
@@ -854,10 +1008,40 @@ export async function runSync(): Promise<{
     }
 
     console.log(
-      `[sync] Done — parties: ${partiesChanged}, constituencies: ${constituenciesChanged} changed`
+      `[sync] Done (${syncType}) — parties: ${partiesChanged}, constituencies: ${constituenciesChanged} changed`
     );
 
     return { partiesChanged, constituenciesChanged };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (logId) {
+      await execute(
+        `UPDATE sync_log SET finished_at = NOW(), status = 'failed', error_msg = ? WHERE id = ?`,
+        [message.slice(0, 1000), logId]
+      );
+    }
+    throw err;
+  }
+}
+
+export async function runSync(): Promise<{
+  partiesChanged: number;
+  constituenciesChanged: number;
+}> {
+  if (syncing) return { partiesChanged: 0, constituenciesChanged: 0 };
+  syncing = true;
+
+  try {
+    if (EXTERNAL_SYNC_ENABLED) {
+      // Recurring sync should not pull full constituency-wise EC data.
+      return await executeExternalSyncCycle("full", {
+        includeConstituencies: false,
+      });
+    }
+
+    console.log("[sync] External fetch disabled (DB-only mode)");
+    await preWarmRedis();
+    return { partiesChanged: 0, constituenciesChanged: 0 };
   } catch (err) {
     console.error("[sync] Error:", err);
     return { partiesChanged: 0, constituenciesChanged: 0 };
@@ -866,11 +1050,55 @@ export async function runSync(): Promise<{
   }
 }
 
+export async function runExternalBackfillOnce(): Promise<{
+  partiesChanged: number;
+  constituenciesChanged: number;
+}> {
+  if (syncing) return { partiesChanged: 0, constituenciesChanged: 0 };
+  syncing = true;
+  try {
+    return await executeExternalSyncCycle("external-backfill", {
+      includeConstituencies: true,
+    });
+  } catch (err) {
+    console.error("[sync] External backfill error:", err);
+    return { partiesChanged: 0, constituenciesChanged: 0 };
+  } finally {
+    syncing = false;
+  }
+}
+
+export async function runExternalConstituencyProbe(
+  districtId: number,
+  constNum: number
+): Promise<{
+  changed: boolean;
+  districtId: number;
+  constNum: number;
+  status: "won" | "leading" | "pending";
+  totalVotes: number;
+}> {
+  await ensureSchema();
+  const result = await syncSingleConstituency(districtId, constNum);
+  await preWarmRedis();
+  return {
+    changed: result.changed,
+    districtId,
+    constNum,
+    status: result.status,
+    totalVotes: result.totalVotes,
+  };
+}
+
 // ── Auto-start sync loop (singleton) ─────────────────────────────────
 
 let intervalHandle: ReturnType<typeof setInterval> | null = null;
 
 export function startSyncLoop() {
+  if (!ENABLE_BACKGROUND_SYNC) {
+    console.log("[sync] Sync loop disabled in final-results mode");
+    return;
+  }
   if (intervalHandle) return;
   const interval = Number(process.env.SYNC_INTERVAL) || 120_000;
 

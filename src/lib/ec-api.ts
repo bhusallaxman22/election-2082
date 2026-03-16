@@ -90,29 +90,18 @@ async function getSession(): Promise<{ cookie: string; csrf: string }> {
 }
 
 export async function fetchECJson<T = unknown>(filePath: string): Promise<T> {
-  // Try direct static file fetch first (like browser does), fall back to SecureJson handler
+  // The EC site itself reads election JSON through SecureJson with a fresh session/CSRF.
+  // The raw static files can lag behind and return placeholder zeroed vote totals.
   const directUrl = `${EC_BASE}/${filePath}`;
   const handlerUrl = `${EC_BASE}/Handlers/SecureJson.ashx?file=${filePath}`;
+  const allowDirectFallback =
+    !filePath.includes("/HOR/FPTP/") && !filePath.includes("/PA/FPTP/");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
 
   try {
-    // Attempt 1: Direct static fetch (no session/CSRF needed)
-    const directRes = await fetch(directUrl, {
-      headers: {
-        ...COMMON_HEADERS,
-        Referer: EC_BASE + "/",
-      },
-      signal: controller.signal,
-    });
-
-    if (directRes.ok) {
-      const text = await directRes.text();
-      return JSON.parse(text.replace(/^\uFEFF/, ""));
-    }
-
-    // Attempt 2: Fall back to SecureJson handler with session/CSRF
+    // Attempt 1: SecureJson handler with session/CSRF
     const makeHeaders = (session: { cookie: string; csrf: string }) => ({
       ...COMMON_HEADERS,
       "X-Csrf-Token": session.csrf,
@@ -156,7 +145,25 @@ export async function fetchECJson<T = unknown>(filePath: string): Promise<T> {
       }
     }
 
-    throw new Error(`EC API failed after ${MAX_RETRIES} retries: ${filePath}`);
+    if (!allowDirectFallback) {
+      throw new Error(`EC API failed after ${MAX_RETRIES} retries: ${filePath}`);
+    }
+
+    // Attempt 2: direct static fetch as a fallback for lookup/static files.
+    const directRes = await fetch(directUrl, {
+      headers: {
+        ...COMMON_HEADERS,
+        Referer: EC_BASE + "/",
+      },
+      signal: controller.signal,
+    });
+
+    if (!directRes.ok) {
+      throw new Error(`EC API failed after ${MAX_RETRIES} retries: ${filePath}`);
+    }
+
+    const text = await directRes.text();
+    return JSON.parse(text.replace(/^\uFEFF/, ""));
   } finally {
     clearTimeout(timeout);
   }
@@ -336,9 +343,18 @@ export async function fetchECConstituencyResults(
   districtId: number,
   constNumber: number
 ): Promise<ECCandidate[]> {
-  return fetchECJson(
+  const candidates = await fetchECJson<ECCandidate[]>(
     `JSONFiles/Election2082/HOR/FPTP/HOR-${districtId}-${constNumber}.json`
   );
+  const hasVotes = (candidates || []).some(
+    (candidate) => Number(candidate?.TotalVoteReceived || 0) > 0
+  );
+  if (!hasVotes) {
+    throw new Error(
+      `EC constituency payload was zeroed for ${districtId}-${constNumber}`
+    );
+  }
+  return candidates;
 }
 
 // ─── District ID → English name mapping ──────────────────────────────
@@ -374,27 +390,21 @@ export interface PartyMeta {
 
 export const EC_PARTY_META: Record<number, PartyMeta> = {
   // Verified against actual 2082 EC data (PoliticalPartyName field)
-  2528: { name: "Rastriya Swatantra Party", shortName: "RSP", color: "#E63946" },
-  2583: { name: "Nepali Congress", shortName: "NC", color: "#2196F3" },
-  2598: { name: "CPN-UML", shortName: "CPN-UML", color: "#F44336" },
-  2557: { name: "Nepal Communist Party", shortName: "NCP", color: "#FF5722" },
-  2604: { name: "Rastriya Prajatantra Party", shortName: "RPP", color: "#FF9800" },
-  2542: { name: "Janata Samajbadi Party", shortName: "JSP", color: "#4CAF50" },
-  2526: { name: "CPN (Maoist Centre)", shortName: "Maoist", color: "#B71C1C" },
-  2585: { name: "Janamat Party", shortName: "JP", color: "#795548" },
-  2531: { name: "Nagarik Unmukti Party", shortName: "NUP", color: "#607D8B" },
-  2575: { name: "Loktantrik Samajbadi Party", shortName: "LSP", color: "#00897B" },
-  2501: { name: "Shram Sanskriti Party", shortName: "SSP", color: "#9C27B0" },
-  2566: { name: "Ujaylo Nepal Party", shortName: "Ujaylo", color: "#FFC107" },
-  2578: { name: "Nepal Majdur Kisan Party", shortName: "NWPP", color: "#C62828" },
-  2522: { name: "Rastriya Janamorcha", shortName: "RJM", color: "#009688" },
+  2528: { name: "Rastriya Swatantra Party", shortName: "RSP", color: "#2563EB" },
+  2583: { name: "Nepali Congress", shortName: "NC", color: "#16A34A" },
+  2598: { name: "CPN-UML", shortName: "CPN-UML", color: "#DC2626" },
+  2557: { name: "Nepal Communist Party", shortName: "NCP", color: "#C026D3" },
+  2604: { name: "Rastriya Prajatantra Party", shortName: "RPP", color: "#F59E0B" },
+  2542: { name: "Janata Samajbadi Party", shortName: "JSP", color: "#22C55E" },
+  2526: { name: "CPN (Maoist Centre)", shortName: "Maoist", color: "#EC4899" },
+  2585: { name: "Janamat Party", shortName: "JP", color: "#8B5CF6" },
+  2531: { name: "Nagarik Unmukti Party", shortName: "NUP", color: "#0891B2" },
+  2575: { name: "Loktantrik Samajbadi Party", shortName: "LSP", color: "#0F766E" },
+  2501: { name: "Shram Sanskriti Party", shortName: "SSP", color: "#374151" },
+  2566: { name: "Ujaylo Nepal Party", shortName: "Ujaylo", color: "#EAB308" },
+  2578: { name: "Nepal Majdur Kisan Party", shortName: "NWPP", color: "#B91C1C" },
+  2522: { name: "Rastriya Janamorcha", shortName: "RJM", color: "#0F766E" },
 };
-
-// Deterministic color fallback
-const FALLBACK_COLORS = [
-  "#E63946", "#2196F3", "#FF5722", "#4CAF50", "#FF9800",
-  "#9C27B0", "#00BCD4", "#795548", "#607D8B", "#FFC107",
-];
 
 /**
  * Get party metadata from EC symbolId.
@@ -408,7 +418,7 @@ export function getPartyMeta(symbolId: number, partyName?: string): PartyMeta {
 
   // 2. Check if independent (स्वतन्त्र)
   if (partyName === "स्वतन्त्र" || partyName === "Independent") {
-    return { name: "Independent", shortName: "IND", color: "#9E9E9E" };
+    return { name: "Independent", shortName: "IND", color: "#1E3A8A" };
   }
 
   // 3. Fuzzy match by Nepali name for parties not in the fixed symbolId map
@@ -430,6 +440,6 @@ export function getPartyMeta(symbolId: number, partyName?: string): PartyMeta {
   return {
     name: partyName || "Others",
     shortName: "OTH",
-    color: FALLBACK_COLORS[symbolId % FALLBACK_COLORS.length],
+    color: "#F59E0B",
   };
 }

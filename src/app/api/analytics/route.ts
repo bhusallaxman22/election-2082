@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { cacheGet } from "@/lib/redis";
-import { query } from "@/lib/db";
-import { ensureSchema } from "@/lib/migrate";
-import type { SeatResult } from "@/app/api/all-results/route";
+import { loadSeatResults, type SeatResult } from "@/lib/seat-results";
 
 export const dynamic = "force-dynamic";
 
@@ -15,60 +13,46 @@ const PROV_SEATS: Record<number, number> = {
   1: 28, 2: 32, 3: 33, 4: 18, 5: 26, 6: 12, 7: 16,
 };
 
+function normalizeSeat(seat: SeatResult): SeatResult {
+  const candidates = [...(seat.candidates || [])].sort((a, b) => b.votes - a.votes);
+  const leader = candidates[0];
+  const runnerUp = candidates[1];
+  const candidateVoteSum = candidates.reduce((sum, candidate) => sum + (candidate.votes || 0), 0);
+  const leaderVotes = Math.max(seat.leaderVotes || 0, leader?.votes || 0);
+  const runnerUpVotes = Math.max(seat.runnerUpVotes || 0, runnerUp?.votes || 0);
+  const totalVotes = Math.max(seat.totalVotes || 0, candidateVoteSum, leaderVotes);
+
+  let status = seat.status;
+  if (candidates.some((candidate) => candidate.status === "won")) status = "won";
+  else if ((status === "pending" || status === "counting") && totalVotes > 0) status = "leading";
+
+  return {
+    ...seat,
+    partyShortName: leader?.partyShortName || seat.partyShortName,
+    partyColor: leader?.partyColor || seat.partyColor,
+    leaderName: leader?.name || seat.leaderName,
+    leaderVotes,
+    runnerUpName: runnerUp?.name || seat.runnerUpName,
+    runnerUpVotes,
+    margin:
+      runnerUpVotes > 0
+        ? Math.max(leaderVotes - runnerUpVotes, 0)
+        : seat.margin,
+    totalVotes,
+    status,
+    candidates,
+  };
+}
+
 export async function GET() {
   try {
-    let seats: SeatResult[] | null = await cacheGet<SeatResult[]>("all_results");
-
-    if (!seats) {
-      await ensureSchema();
-      const rows = await query<{
-        district_id: number;
-        const_number: number;
-        district_name: string;
-        constituency_name: string;
-        constituency_slug: string;
-        province_id: number;
-        province_name: string;
-        leader_party: string;
-        leader_party_color: string;
-        leader_name: string;
-        leader_votes: number;
-        runner_up_name: string;
-        runner_up_votes: number;
-        margin: number;
-        total_votes: number;
-        status: string;
-        candidates_json: string;
-      }>("SELECT * FROM constituency_results ORDER BY province_id, district_id, const_number");
-
-      seats = rows.map((r) => {
-        let candidates: SeatResult["candidates"] = [];
-        try {
-          const raw = typeof r.candidates_json === "string" ? JSON.parse(r.candidates_json) : r.candidates_json;
-          candidates = (raw || []).slice(0, 10).map((c: Record<string, unknown>) => ({
-            id: String(c.id), name: c.name as string,
-            partyShortName: c.partyShortName as string, partyColor: c.partyColor as string,
-            votes: c.votes as number, status: c.status as string, margin: c.margin as number | undefined,
-            photo: (c.photo as string) || `/api/candidate-image/${c.id}`,
-          }));
-        } catch { /* */ }
-        return {
-          districtId: r.district_id, constNumber: r.const_number,
-          districtName: r.district_name, constituency: r.constituency_name,
-          constituencySlug: r.constituency_slug, provinceId: r.province_id,
-          provinceName: r.province_name, partyShortName: r.leader_party,
-          partyColor: r.leader_party_color, leaderName: r.leader_name,
-          leaderVotes: r.leader_votes, runnerUpName: r.runner_up_name,
-          runnerUpVotes: r.runner_up_votes, margin: r.margin,
-          totalVotes: r.total_votes, status: r.status as SeatResult["status"], candidates,
-        };
-      });
-    }
+    const { seats: rawSeats } = await loadSeatResults();
+    const seats = rawSeats.map(normalizeSeat);
 
     // Fetch PR data
     let prParties: { shortName: string; color: string; seats: number; votes: number; votePercent: number }[] = [];
     try {
-      const prCached = await cacheGet<{ parties: typeof prParties }>("pr_party_results_v2");
+      const prCached = await cacheGet<{ parties: typeof prParties }>("pr_party_results_v3");
       if (prCached?.parties) prParties = prCached.parties;
     } catch { /* */ }
 
@@ -88,10 +72,7 @@ export async function GET() {
       leaderPartyColor: s.partyColor, leaderVotes: s.leaderVotes,
       runnerUpName: s.runnerUpName, runnerUpVotes: s.runnerUpVotes,
       margin: s.margin, totalVotes: s.totalVotes, status: s.status,
-      candidates: (s.candidates || []).map((c) => ({
-        id: c.id, name: c.name, party: c.partyShortName, color: c.partyColor,
-        votes: c.votes, status: c.status, photo: c.photo || `/api/candidate-image/${c.id}`,
-      })),
+      candidates: [],
     }));
 
     // Party standings
@@ -104,14 +85,49 @@ export async function GET() {
     }>();
 
     for (const s of seats) {
+      const candidateVotesByParty = new Map<string, { color: string; votes: number }>();
+      for (const candidate of s.candidates || []) {
+        if (!candidate.partyShortName) continue;
+        const value = candidateVotesByParty.get(candidate.partyShortName) || {
+          color: candidate.partyColor || "#94a3b8",
+          votes: 0,
+        };
+        value.votes += candidate.votes || 0;
+        candidateVotesByParty.set(candidate.partyShortName, value);
+      }
+
+      if (!candidateVotesByParty.size && s.partyShortName) {
+        candidateVotesByParty.set(s.partyShortName, {
+          color: s.partyColor || "#94a3b8",
+          votes: s.leaderVotes || 0,
+        });
+      }
+
+      for (const [party, value] of candidateVotesByParty.entries()) {
+        const existing = partyMap.get(party) || {
+          color: value.color || "#94a3b8",
+          fptpWins: 0,
+          fptpLeads: 0,
+          prSeats: 0,
+          totalVotes: 0,
+          prVotes: 0,
+          prVotePercent: 0,
+          constituencies: [] as ConstEntry[],
+          provinceWise: new Map<number, { wins: number; leads: number; votes: number }>(),
+        };
+        existing.totalVotes += value.votes;
+        if (!existing.color && value.color) existing.color = value.color;
+        partyMap.set(party, existing);
+      }
+
       if (!s.partyShortName) continue;
+
       const existing = partyMap.get(s.partyShortName) || {
         color: s.partyColor || "#94a3b8", fptpWins: 0, fptpLeads: 0, prSeats: 0,
         totalVotes: 0, prVotes: 0, prVotePercent: 0, constituencies: [] as ConstEntry[], provinceWise: new Map<number, { wins: number; leads: number; votes: number }>(),
       };
       if (s.status === "won") existing.fptpWins++;
       else if (s.status === "leading" || s.status === "counting") existing.fptpLeads++;
-      existing.totalVotes += s.leaderVotes || 0;
       existing.constituencies.push({
         districtId: s.districtId, constNumber: s.constNumber,
         constituency: s.constituency, district: s.districtName,
@@ -185,7 +201,7 @@ export async function GET() {
 
     // Closest races
     const closestRaces = seats
-      .filter((s) => (s.status === "won" || s.status === "leading") && s.margin > 0 && s.margin < 50000)
+      .filter((s) => (s.status === "won" || s.status === "leading") && s.runnerUpVotes > 0 && s.margin > 0 && s.margin < 50000)
       .sort((a, b) => a.margin - b.margin)
       .slice(0, 20)
       .map((s) => ({
@@ -199,7 +215,7 @@ export async function GET() {
 
     // Biggest margins
     const biggestMargins = seats
-      .filter((s) => s.status === "won" && s.margin > 0)
+      .filter((s) => s.status === "won" && s.runnerUpVotes > 0 && s.margin > 0)
       .sort((a, b) => b.margin - a.margin)
       .slice(0, 20)
       .map((s) => ({
@@ -254,7 +270,7 @@ export async function GET() {
     };
 
     return NextResponse.json({ success: true, data: analytics }, {
-      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
+      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=1800" },
     });
   } catch (err) {
     console.error("[analytics] Error:", (err as Error).message);

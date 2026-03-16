@@ -30,8 +30,8 @@ export default function CandidateCard({ result }: CandidateCardProps) {
           </span>
         ) : isActive ? (
           <span className="flex items-center gap-1.5 rounded-full border border-sky-100 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-600">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            Live
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            Recorded
           </span>
         ) : (
           <span className="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-1 text-xs text-slate-500">Pending</span>

@@ -42,8 +42,8 @@ export default function Header() {
             </Link>
 
             <div className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700 sm:flex sm:items-center sm:gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Connecting live feed"}
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              {lastUpdated ? `Snapshot updated ${lastUpdated.toLocaleTimeString()}` : "Final results snapshot"}
             </div>
           </div>
 

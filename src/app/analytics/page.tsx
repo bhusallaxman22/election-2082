@@ -17,6 +17,7 @@ import PageTemplate from "@/components/templates/PageTemplate";
 import Avatar from "@/components/atoms/Avatar";
 import Pagination, { usePagination } from "@/components/atoms/Pagination";
 import { useElectionData } from "@/context/ElectionDataContext";
+import { CLIENT_FETCH_CACHE } from "@/lib/results-mode";
 
 const InteractiveMap = dynamic(
   () => import("@/components/organisms/InteractiveMap"),
@@ -1485,9 +1486,11 @@ function AnalyticsPageInner() {
   const { parties: ctxParties } = useElectionData();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<DrillView>({ type: "overview" });
   const [, setHistory] = useState<DrillView[]>([]);
   const [selectedProvinceDistrictId, setSelectedProvinceDistrictId] = useState<number | null>(null);
+  const [constituencyOverride, setConstituencyOverride] = useState<ConstituencyData | null>(null);
   const [initialQuery] = useState(() => ({
     view: searchParams.get("view"),
     name: searchParams.get("name"),
@@ -1496,13 +1499,20 @@ function AnalyticsPageInner() {
   }));
 
   useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+
     (async () => {
       try {
-        const res = await fetch("/api/analytics");
+        const res = await fetch("/api/analytics", { signal: controller.signal, cache: CLIENT_FETCH_CACHE });
+        if (!res.ok) throw new Error(`Analytics request failed (${res.status})`);
         const json = await res.json();
+        if (!active) return;
         if (json.success) {
           const payload = json.data as AnalyticsData;
           setData(payload);
+          setError(null);
 
           const viewParam = initialQuery.view;
           if (viewParam === "party") {
@@ -1531,10 +1541,25 @@ function AnalyticsPageInner() {
               }
             }
           }
+        } else {
+          setError("Analytics data could not be loaded.");
         }
-      } catch { /* */ }
-      setLoading(false);
+      } catch (err) {
+        if (!active) return;
+        setError(
+          err instanceof Error && err.name === "AbortError"
+            ? "Analytics request timed out."
+            : "Analytics data could not be loaded."
+        );
+      }
+      if (active) setLoading(false);
     })();
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [initialQuery]);
 
   // Apply correct party colors and logos from context data
@@ -1636,6 +1661,93 @@ function AnalyticsPageInner() {
     return null;
   }, []);
 
+  useEffect(() => {
+    if (view.type !== "constituency") return;
+
+    let active = true;
+    const fallback = findConstituency(correctedData, view.districtId, view.constNumber);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/constituency?district=${view.districtId}&const=${view.constNumber}`);
+        const json = await res.json();
+        if (!active || !json.success || !json.data) return;
+
+        const candidates = Array.isArray(json.data.candidates)
+          ? json.data.candidates.map((candidate: {
+              id: string;
+              name: string;
+              partyShortName: string;
+              partyColor: string;
+              votes: number;
+              status: string;
+              photo?: string;
+            }) => ({
+              id: candidate.id,
+              name: candidate.name,
+              party: candidate.partyShortName,
+              color: candidate.partyColor,
+              votes: Number(candidate.votes || 0),
+              status: candidate.status,
+              photo: candidate.photo,
+            }))
+          : [];
+
+        const leader = candidates[0];
+        const runnerUp = candidates[1];
+        const countingStatus = String(json.data.countingStatus || "").toLowerCase();
+        const status =
+          leader?.status ||
+          (countingStatus.includes("declared")
+            ? "won"
+            : countingStatus.includes("progress")
+              ? "leading"
+              : "pending");
+
+        setConstituencyOverride({
+          districtId: Number(json.data.districtId),
+          constNumber: Number(json.data.constNumber),
+          constituencySlug: String(json.data.constituencySlug || fallback?.constituencySlug || `${view.districtId}-${view.constNumber}`),
+          constituency: String(json.data.constituency || fallback?.constituency || "Constituency"),
+          district: fallback?.district || "",
+          provinceId: Number(json.data.provinceId || fallback?.provinceId || 0),
+          province: String(json.data.province || fallback?.province || ""),
+          leaderName: leader?.name || fallback?.leaderName || "",
+          leaderParty: leader?.party || fallback?.leaderParty || "",
+          leaderPartyColor: leader?.color || fallback?.leaderPartyColor || "#94a3b8",
+          leaderVotes: leader?.votes || fallback?.leaderVotes || 0,
+          runnerUpName: runnerUp?.name || fallback?.runnerUpName || "",
+          runnerUpVotes: runnerUp?.votes || fallback?.runnerUpVotes || 0,
+          margin:
+            leader && runnerUp
+              ? leader.votes - runnerUp.votes
+              : fallback?.margin || 0,
+          totalVotes: Number(json.data.totalVotes || fallback?.totalVotes || 0),
+          status,
+          candidates,
+        });
+      } catch { /* */ }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [view, correctedData, findConstituency]);
+
+  const displayedConstituency = useMemo(() => {
+    if (view.type !== "constituency") return null;
+    if (
+      constituencyOverride &&
+      constituencyOverride.districtId === view.districtId &&
+      constituencyOverride.constNumber === view.constNumber
+    ) {
+      return constituencyOverride;
+    }
+    return (
+      findConstituency(correctedData, view.districtId, view.constNumber)
+    );
+  }, [view, constituencyOverride, correctedData, findConstituency]);
+
   const breadcrumb = useMemo(() => {
     const parts: { label: string; onClick?: () => void }[] = [
       { label: "Analytics", onClick: view.type !== "overview" ? () => { setView({ type: "overview" }); setHistory([]); } : undefined },
@@ -1646,11 +1758,11 @@ function AnalyticsPageInner() {
       parts.push({ label: p?.province || `Province ${view.provinceId}` });
     }
     if (view.type === "constituency") {
-      const c = findConstituency(correctedData, view.districtId, view.constNumber);
+      const c = displayedConstituency;
       if (c) parts.push({ label: c.constituency });
     }
     return parts;
-  }, [view, correctedData, findConstituency]);
+  }, [view, correctedData, displayedConstituency]);
 
   return (
     <PageTemplate>
@@ -1675,7 +1787,7 @@ function AnalyticsPageInner() {
             );
           })()}
           {view.type === "province" && (correctedData?.provinceBreakdown.find((p) => p.provinceId === (view as { provinceId: number }).provinceId)?.province || "Province")}
-          {view.type === "constituency" && (findConstituency(correctedData, (view as { districtId: number }).districtId, (view as { constNumber: number }).constNumber)?.constituency || "Constituency")}
+          {view.type === "constituency" && (displayedConstituency?.constituency || "Constituency")}
         </h2>
         <p className="mt-0.5 text-sm text-slate-500">
           {view.type === "overview" && "Deep data analysis and insights from Nepal Election 2082"}
@@ -1686,6 +1798,13 @@ function AnalyticsPageInner() {
       </div>
 
       {loading && <div className="flex items-center justify-center py-24"><Spin size="large" /></div>}
+
+      {!loading && error && !correctedData && (
+        <div className="rounded-2xl border border-red-100 bg-red-50/70 px-5 py-8 text-center">
+          <p className="text-sm font-semibold text-red-700">{error}</p>
+          <p className="mt-1 text-xs text-red-500">Refresh the page or retry after the API stabilizes.</p>
+        </div>
+      )}
 
       {correctedData && view.type === "overview" && (
         <div className="space-y-6">
@@ -1727,7 +1846,7 @@ function AnalyticsPageInner() {
       })()}
 
       {correctedData && view.type === "constituency" && (() => {
-        const c = findConstituency(correctedData, (view as { districtId: number }).districtId, (view as { constNumber: number }).constNumber);
+        const c = displayedConstituency;
         return c ? <ConstituencyPanel data={c} onBack={goBack} onDistrict={onDistrictFromConstituency} /> : <p className="py-12 text-center text-slate-400">Constituency not found</p>;
       })()}
     </PageTemplate>
